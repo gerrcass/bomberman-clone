@@ -40,6 +40,15 @@ export interface TileCoord {
 
 export type TileKind = 'floor' | 'wall' | 'brick';
 
+/** Collectible power-up kinds hidden under bricks. */
+export type PowerUpKind = 'bomb' | 'fire' | 'speed' | 'shield';
+
+/** A revealed power-up waiting on the arena floor. */
+export interface PowerUpState {
+  readonly tile: TileCoord;
+  readonly kind: PowerUpKind;
+}
+
 /**
  * Row-major tile grid. `tiles[y * width + x]`.
  * The arena is the static terrain of a stage; bombers, bombs, blasts, and
@@ -110,8 +119,15 @@ export interface StageState {
   readonly activeBombs: number;
   readonly bombCapacity: number;
   readonly blastRange: number;
+  /** Number of collected speed power-ups; each adds 8% movement speed. */
+  readonly speedTier: number;
+  /** Shield charges currently held; each absorbs one lethal hit. */
+  readonly shieldCharges: number;
+  /** Fuse duration for newly placed bombs, in milliseconds. */
+  readonly fuseMs: number;
   readonly bombs: readonly BombState[];
   readonly blasts: readonly BlastState[];
+  readonly powerUps: readonly PowerUpState[];
 }
 
 /** A bomber's desired action for one tick. */
@@ -167,6 +183,25 @@ export type StageEvent =
       readonly tick: number;
       readonly tile: TileCoord;
       readonly points: number;
+    }
+  | {
+      readonly type: 'power-up-revealed';
+      readonly tick: number;
+      readonly tile: TileCoord;
+      readonly kind: PowerUpKind;
+    }
+  | {
+      readonly type: 'power-up-collected';
+      readonly tick: number;
+      readonly tile: TileCoord;
+      readonly kind: PowerUpKind;
+      readonly points: number;
+    }
+  | {
+      readonly type: 'shield-absorbed';
+      readonly tick: number;
+      readonly tile: TileCoord;
+      readonly chargesRemaining: number;
     }
   | {
       readonly type: 'player-hit';

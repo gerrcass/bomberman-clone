@@ -1,4 +1,10 @@
-import { type Direction, type StageEvent, type StageState, TILE_SIZE } from '../game';
+import {
+  type Direction,
+  type PowerUpKind,
+  type StageEvent,
+  type StageState,
+  TILE_SIZE,
+} from '../game';
 import { createSprites, type SpriteSet } from './sprites';
 
 export interface ArenaRenderer {
@@ -54,6 +60,7 @@ export function createArenaRenderer(canvas: HTMLCanvasElement): ArenaRenderer {
       drawTerrain(context, state, sprites);
       drawBombs(context, state, sprites);
       drawBlasts(context, state, sprites);
+      drawPowerUps(context, state, sprites);
       drawBrickParticles(context, state, particles);
       drawPlayer(context, state, sprites);
     },
@@ -151,6 +158,45 @@ function drawBlasts(
   }
 
   context.globalAlpha = 1;
+}
+
+function drawPowerUps(
+  context: CanvasRenderingContext2D,
+  state: StageState,
+  sprites: SpriteSet,
+): void {
+  for (const powerUp of state.powerUps) {
+    const sprite = powerUpSprite(sprites, powerUp.kind);
+    const bob = Math.sin((state.tick + powerUp.tile.x * 7 + powerUp.tile.y * 13) / 14) * 2;
+    const pixelX = powerUp.tile.x * TILE_SIZE;
+    const pixelY = powerUp.tile.y * TILE_SIZE;
+    const inset = TILE_SIZE * 0.14;
+
+    context.globalAlpha = 0.18;
+    context.fillStyle = '#eaffff';
+    context.fillRect(pixelX + inset, pixelY + inset, TILE_SIZE - inset * 2, TILE_SIZE - inset * 2);
+    context.globalAlpha = 1;
+    context.drawImage(
+      sprite,
+      Math.round(pixelX + inset),
+      Math.round(pixelY + inset + bob),
+      Math.round(TILE_SIZE - inset * 2),
+      Math.round(TILE_SIZE - inset * 2),
+    );
+  }
+}
+
+function powerUpSprite(sprites: SpriteSet, kind: PowerUpKind): HTMLCanvasElement {
+  switch (kind) {
+    case 'bomb':
+      return sprites.powerUpBomb;
+    case 'fire':
+      return sprites.powerUpFire;
+    case 'speed':
+      return sprites.powerUpSpeed;
+    case 'shield':
+      return sprites.powerUpShield;
+  }
 }
 
 function drawBrickParticles(

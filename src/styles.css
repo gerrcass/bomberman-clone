@@ -69,13 +69,17 @@ body {
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
-  padding: 6px 10px;
+  padding: 5px 9px;
   border-right: 1px solid #1c2740;
   min-width: 0;
 }
 
-.hud-stat:last-child {
+.hud-stat:nth-child(4n) {
   border-right: 0;
+}
+
+.hud-stat:nth-child(-n + 4) {
+  border-bottom: 1px solid #1c2740;
 }
 
 .hud-label {
@@ -89,7 +93,7 @@ body {
 
 .hud-value {
   color: var(--text);
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;

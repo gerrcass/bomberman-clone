@@ -120,6 +120,103 @@ const BLAST_PALETTE: Palette = {
   '4': '#ffe27a',
 };
 
+const POWERUP_BOMB = [
+  '................',
+  '................',
+  '.......4........',
+  '......444.......',
+  '....00000000....',
+  '...0111111110...',
+  '..011222221110..',
+  '..012223322210..',
+  '..012223322210..',
+  '..012222222210..',
+  '..011222221110..',
+  '...0111111110...',
+  '....00000000....',
+  '................',
+  '................',
+  '................',
+] as const;
+
+const POWERUP_BOMB_PALETTE: Palette = {
+  '0': '#131a2a',
+  '1': '#d59b24',
+  '2': '#ffd166',
+  '3': '#eaffff',
+  '4': '#ff7a2f',
+};
+
+const POWERUP_FIRE = [
+  '................',
+  '................',
+  '.......4........',
+  '......443.......',
+  '.....44334......',
+  '....4433334.....',
+  '....4333334.....',
+  '...443333334....',
+  '...433333344....',
+  '....4333334.....',
+  '.....43334......',
+  '......434.......',
+  '.......4........',
+  '................',
+  '................',
+  '................',
+] as const;
+
+const POWERUP_FIRE_PALETTE: Palette = {
+  '3': '#ff7a2f',
+  '4': '#ffe27a',
+};
+
+const POWERUP_SPEED = [
+  '................',
+  '................',
+  '........333.....',
+  '.......333......',
+  '......333.......',
+  '.....333........',
+  '....33333333....',
+  '...333333333....',
+  '........333.....',
+  '.......333......',
+  '......333.......',
+  '.....333........',
+  '....33..........',
+  '................',
+  '................',
+  '................',
+] as const;
+
+const POWERUP_SPEED_PALETTE: Palette = {
+  '3': '#3fe0e6',
+};
+
+const POWERUP_SHIELD = [
+  '................',
+  '................',
+  '....33333333....',
+  '...3333333333...',
+  '..333333333333..',
+  '..333333333333..',
+  '..333333333333..',
+  '..333333333333..',
+  '...3333333333...',
+  '...3333333333...',
+  '....33333333....',
+  '.....333333.....',
+  '......3333......',
+  '.......33.......',
+  '................',
+  '................',
+] as const;
+
+const POWERUP_SHIELD_PALETTE: Palette = {
+  '3': '#7aa7ff',
+};
+
 const FLOOR_PALETTE: Palette = {
   a: '#0e1520',
   b: '#1a2231',
@@ -148,6 +245,10 @@ export interface SpriteSet {
   readonly brick: HTMLCanvasElement;
   readonly bomb: HTMLCanvasElement;
   readonly blast: HTMLCanvasElement;
+  readonly powerUpBomb: HTMLCanvasElement;
+  readonly powerUpFire: HTMLCanvasElement;
+  readonly powerUpSpeed: HTMLCanvasElement;
+  readonly powerUpShield: HTMLCanvasElement;
   readonly playerIdle: HTMLCanvasElement;
   readonly playerWalkA: HTMLCanvasElement;
   readonly playerWalkB: HTMLCanvasElement;
@@ -162,6 +263,10 @@ export function createSprites(): SpriteSet {
     brick: createPixelSprite(createTerrainMatrix('brick'), BRICK_PALETTE, SPRITE_SCALE),
     bomb: createPixelSprite(BOMB, BOMB_PALETTE, SPRITE_SCALE),
     blast: createPixelSprite(BLAST, BLAST_PALETTE, SPRITE_SCALE),
+    powerUpBomb: createPixelSprite(POWERUP_BOMB, POWERUP_BOMB_PALETTE, SPRITE_SCALE),
+    powerUpFire: createPixelSprite(POWERUP_FIRE, POWERUP_FIRE_PALETTE, SPRITE_SCALE),
+    powerUpSpeed: createPixelSprite(POWERUP_SPEED, POWERUP_SPEED_PALETTE, SPRITE_SCALE),
+    powerUpShield: createPixelSprite(POWERUP_SHIELD, POWERUP_SHIELD_PALETTE, SPRITE_SCALE),
     playerIdle: createPixelSprite(PLAYER_IDLE, PLAYER_PALETTE, SPRITE_SCALE),
     playerWalkA: createPixelSprite(PLAYER_WALK_A, PLAYER_PALETTE, SPRITE_SCALE),
     playerWalkB: createPixelSprite(PLAYER_WALK_B, PLAYER_PALETTE, SPRITE_SCALE),

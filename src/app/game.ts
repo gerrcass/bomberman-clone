@@ -30,6 +30,10 @@ export function createGameApp(doc: Document): GameApp {
   const hudLives = requireElement<HTMLElement>(doc, '#hud-lives');
   const hudScore = requireElement<HTMLElement>(doc, '#hud-score');
   const hudBombs = requireElement<HTMLElement>(doc, '#hud-bombs');
+  const hudBlast = requireElement<HTMLElement>(doc, '#hud-blast');
+  const hudSpeed = requireElement<HTMLElement>(doc, '#hud-speed');
+  const hudShield = requireElement<HTMLElement>(doc, '#hud-shield');
+  const hudFuse = requireElement<HTMLElement>(doc, '#hud-fuse');
   const titleScreen = requireElement<HTMLElement>(doc, '#title-screen');
   const pauseScreen = requireElement<HTMLElement>(doc, '#pause-screen');
   const gameoverScreen = requireElement<HTMLElement>(doc, '#gameover-screen');
@@ -64,6 +68,10 @@ export function createGameApp(doc: Document): GameApp {
     setText(hudLives, String(state.lives));
     setText(hudScore, String(state.score).padStart(6, '0'));
     setText(hudBombs, `${state.activeBombs}/${state.bombCapacity}`);
+    setText(hudBlast, String(state.blastRange));
+    setText(hudSpeed, String(state.speedTier));
+    setText(hudShield, String(state.shieldCharges));
+    setText(hudFuse, `${(state.fuseMs / 1000).toFixed(1)}s`);
   }
 
   function startRun(): void {

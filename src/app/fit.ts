@@ -4,7 +4,7 @@ export const CANVAS_HEIGHT = 624;
 
 const VIEWPORT_WIDTH_MARGIN = 32;
 /** HUD, gaps, and page padding reserved around the canvas. */
-const VERTICAL_CHROME = 128;
+const VERTICAL_CHROME = 144;
 
 export interface CanvasFit {
   readonly width: number;

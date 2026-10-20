@@ -15,6 +15,17 @@ import {
   tickMovement,
 } from './movement';
 import {
+  generateHiddenPowerUps,
+  type HiddenPowerUp,
+  MAX_BLAST_RANGE,
+  MAX_BOMB_CAPACITY,
+  MAX_SHIELD_CHARGES,
+  MAX_SPEED_STACKS,
+  POWER_UP_POINTS,
+  SHIELD_INVULNERABILITY_TICKS,
+  speedForStacks,
+} from './powerups';
+import {
   type ArenaState,
   BASE_BLAST_RANGE,
   BASE_BOMB_CAPACITY,
@@ -29,6 +40,8 @@ import {
   msToTicks,
   PLAYER_BOMBER_ID,
   type PlayerState,
+  type PowerUpKind,
+  type PowerUpState,
   RESPAWN_DELAY_TICKS,
   RESPAWN_INVULNERABILITY_TICKS,
   STARTING_LIVES,
@@ -55,6 +68,20 @@ export interface StageOptions {
   readonly fuseMs?: number;
   /** Starting lives; defaults to 3. The run layer supplies this later. */
   readonly lives?: number;
+  /** Carried speed power-up stacks; defaults to 0. */
+  readonly speedStacks?: number;
+  /** Carried shield charges; defaults to 0. */
+  readonly shieldCharges?: number;
+  /** Score carried into this stage; defaults to 0. */
+  readonly initialScore?: number;
+  /** Multiplier applied to every point award; defaults to 1. */
+  readonly scoreMultiplier?: number;
+  /**
+   * Test/fixture override for hidden power-ups. Production stages derive a
+   * seeded layout from the arena bricks. A tile without a brick is revealed
+   * immediately.
+   */
+  readonly hiddenPowerUps?: readonly HiddenPowerUp[];
 }
 
 /**
@@ -104,8 +131,11 @@ export function createStage(options: StageOptions): Stage {
   }
 
   const stageNumber = options.stage ?? 1;
-  const bombCapacity = Math.max(1, Math.floor(options.bombCapacity ?? BASE_BOMB_CAPACITY));
-  const blastRange = Math.max(1, Math.floor(options.blastRange ?? BASE_BLAST_RANGE));
+  let bombCapacity = clampStat(options.bombCapacity ?? BASE_BOMB_CAPACITY, 1, MAX_BOMB_CAPACITY);
+  let blastRange = clampStat(options.blastRange ?? BASE_BLAST_RANGE, 1, MAX_BLAST_RANGE);
+  let speedTier = clampStat(options.speedStacks ?? 0, 0, MAX_SPEED_STACKS);
+  let shieldCharges = clampStat(options.shieldCharges ?? 0, 0, MAX_SHIELD_CHARGES);
+  const scoreMultiplier = Math.max(0, options.scoreMultiplier ?? 1);
   const fuseTicks = Math.max(1, msToTicks(options.fuseMs ?? BASE_FUSE_MS));
   const startingLives = Math.max(1, Math.floor(options.lives ?? STARTING_LIVES));
 
@@ -119,16 +149,27 @@ export function createStage(options: StageOptions): Stage {
     spawn,
   };
 
-  let movement = createMovementState(spawn, 'up', BASE_MOVE_SPEED);
+  let movement = createMovementState(spawn, 'up', speedForStacks(BASE_MOVE_SPEED, speedTier));
   const bombs: MutableBomb[] = [];
   const blasts = new Map<string, MutableBlast>();
+  const hiddenPowerUps = new Map<string, PowerUpKind>();
+  const powerUps = new Map<string, PowerUpState>();
+  const hiddenSource = options.hiddenPowerUps ?? generateHiddenPowerUps(arena.arena, options.seed);
+  for (const hidden of hiddenSource) {
+    const key = tileKey(hidden.tile.x, hidden.tile.y);
+    if (tileAt(arena.arena, hidden.tile.x, hidden.tile.y) === 'brick') {
+      hiddenPowerUps.set(key, hidden.kind);
+    } else {
+      powerUps.set(key, { tile: { ...hidden.tile }, kind: hidden.kind });
+    }
+  }
   let nextBombId = 1;
 
   const respawnCorners = resolveRespawnCorners(arena.arena, spawn);
 
   let tick = 0;
   let lives = startingLives;
-  let score = 0;
+  let score = Math.max(0, Math.floor(options.initialScore ?? 0));
   let status: StageStatus = 'playing';
   let playerAlive = true;
   let invulnerableTicks = 0;
@@ -175,6 +216,9 @@ export function createStage(options: StageOptions): Stage {
       }
       resolveBombs(events);
 
+      if (playerAlive) {
+        collectPowerUps(events);
+      }
       if (playerAlive && invulnerableTicks === 0 && blastAt(movement.to.x, movement.to.y)) {
         hitPlayer(events);
       }
@@ -199,10 +243,16 @@ export function createStage(options: StageOptions): Stage {
         activeBombs: bombs.filter((bomb) => bomb.owner === PLAYER_BOMBER_ID).length,
         bombCapacity,
         blastRange,
+        speedTier,
+        shieldCharges,
+        fuseMs: ticksToMs(fuseTicks),
         bombs: bombs.map(snapshotBomb),
         blasts: [...blasts.values()]
           .sort((a, b) => a.tile.y - b.tile.y || a.tile.x - b.tile.x)
           .map(snapshotBlast),
+        powerUps: [...powerUps.values()]
+          .sort((a, b) => a.tile.y - b.tile.y || a.tile.x - b.tile.x)
+          .map((powerUp) => ({ tile: { ...powerUp.tile }, kind: powerUp.kind })),
       };
     },
   };
@@ -222,6 +272,19 @@ export function createStage(options: StageOptions): Stage {
 
   function hitPlayer(events: StageEvent[]): void {
     const tile = { ...movement.to };
+
+    if (shieldCharges > 0) {
+      shieldCharges -= 1;
+      invulnerableTicks = SHIELD_INVULNERABILITY_TICKS;
+      events.push({
+        type: 'shield-absorbed',
+        tick,
+        tile: { ...tile },
+        chargesRemaining: shieldCharges,
+      });
+      return;
+    }
+
     lives -= 1;
     playerAlive = false;
     invulnerableTicks = 0;
@@ -244,9 +307,49 @@ export function createStage(options: StageOptions): Stage {
     respawnTile = chooseRespawnTile();
   }
 
+  function collectPowerUps(events: StageEvent[]): void {
+    const key = tileKey(movement.to.x, movement.to.y);
+    const powerUp = powerUps.get(key);
+    if (powerUp === undefined) {
+      return;
+    }
+
+    powerUps.delete(key);
+    switch (powerUp.kind) {
+      case 'bomb':
+        bombCapacity = Math.min(MAX_BOMB_CAPACITY, bombCapacity + 1);
+        break;
+      case 'fire':
+        blastRange = Math.min(MAX_BLAST_RANGE, blastRange + 1);
+        break;
+      case 'speed':
+        speedTier = Math.min(MAX_SPEED_STACKS, speedTier + 1);
+        movement.speed = speedForStacks(BASE_MOVE_SPEED, speedTier);
+        break;
+      case 'shield':
+        shieldCharges = Math.min(MAX_SHIELD_CHARGES, shieldCharges + 1);
+        break;
+    }
+
+    const points = award(POWER_UP_POINTS);
+    events.push({
+      type: 'power-up-collected',
+      tick,
+      tile: { ...powerUp.tile },
+      kind: powerUp.kind,
+      points,
+    });
+  }
+
+  function award(basePoints: number): number {
+    const points = Math.round(basePoints * scoreMultiplier);
+    score += points;
+    return points;
+  }
+
   function respawnPlayer(events: StageEvent[]): void {
     const tile = respawnTile ?? spawn;
-    movement = createMovementState(tile, 'up', BASE_MOVE_SPEED);
+    movement = createMovementState(tile, 'up', speedForStacks(BASE_MOVE_SPEED, speedTier));
     playerAlive = true;
     invulnerableTicks = RESPAWN_INVULNERABILITY_TICKS;
     respawnTicks = 0;
@@ -439,8 +542,16 @@ export function createStage(options: StageOptions): Stage {
     }
 
     tiles[index] = 'floor';
-    score += BRICK_POINTS;
-    events.push({ type: 'brick-destroyed', tick, tile: { x, y }, points: BRICK_POINTS });
+    const points = award(BRICK_POINTS);
+    events.push({ type: 'brick-destroyed', tick, tile: { x, y }, points });
+
+    const key = tileKey(x, y);
+    const hidden = hiddenPowerUps.get(key);
+    if (hidden !== undefined) {
+      hiddenPowerUps.delete(key);
+      powerUps.set(key, { tile: { x, y }, kind: hidden });
+      events.push({ type: 'power-up-revealed', tick, tile: { x, y }, kind: hidden });
+    }
   }
 }
 
@@ -547,4 +658,11 @@ function snapshotBlast(blast: MutableBlast): BlastState {
 
 function tileKey(x: number, y: number): string {
   return `${x},${y}`;
+}
+
+function clampStat(value: number, minimum: number, maximum: number): number {
+  if (!Number.isFinite(value)) {
+    return minimum;
+  }
+  return Math.max(minimum, Math.min(maximum, Math.floor(value)));
 }
