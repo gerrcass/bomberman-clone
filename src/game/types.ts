@@ -18,6 +18,7 @@ export const BLAST_LIFETIME_TICKS = 27;
 export const RESPAWN_DELAY_TICKS = 90;
 export const RESPAWN_INVULNERABILITY_TICKS = 150;
 export const BRICK_POINTS = 10;
+export const RIVAL_POINTS = 500;
 
 export const PLAYER_BOMBER_ID = 'player';
 
@@ -62,6 +63,9 @@ export interface ArenaState {
 
 export type StageStatus = 'playing' | 'cleared' | 'gameover';
 
+/** AI temperament that drives rival decision weights. */
+export type RivalPersonality = 'aggressive' | 'balanced' | 'cautious';
+
 /** Read-only view of the player bomber used by the renderer, HUD, and tests. */
 export interface PlayerState {
   /** Tile occupied at rest, or the tile being left while mid-step. */
@@ -84,6 +88,27 @@ export interface PlayerState {
   readonly respawnTicks: number;
 }
 
+/** Read-only view of one AI rival. */
+export interface RivalState {
+  readonly id: string;
+  readonly name: string;
+  readonly color: string;
+  readonly personality: RivalPersonality;
+  readonly tile: TileCoord;
+  readonly from: TileCoord;
+  readonly to: TileCoord;
+  readonly progress: number;
+  readonly position: { readonly x: number; readonly y: number };
+  readonly direction: Direction;
+  readonly moving: boolean;
+  readonly alive: boolean;
+  readonly bombCapacity: number;
+  readonly blastRange: number;
+  readonly speedTier: number;
+  readonly shieldCharges: number;
+  readonly invulnerableTicks: number;
+}
+
 /** Read-only view of one live bomb. */
 export interface BombState {
   readonly id: number;
@@ -103,6 +128,13 @@ export interface BlastState {
   readonly remainingMs: number;
   /** Bomb whose blast first covered this tile. */
   readonly sourceBombId: number;
+}
+
+/** Counters accumulated during one stage. */
+export interface StageStats {
+  readonly bricksDestroyed: number;
+  readonly rivalsDefeated: number;
+  readonly powerUpsCollected: number;
 }
 
 /** Snapshot of everything an observer may read from a stage. */
@@ -128,6 +160,8 @@ export interface StageState {
   readonly bombs: readonly BombState[];
   readonly blasts: readonly BlastState[];
   readonly powerUps: readonly PowerUpState[];
+  readonly rivals: readonly RivalState[];
+  readonly stats: StageStats;
 }
 
 /** A bomber's desired action for one tick. */
@@ -195,6 +229,7 @@ export type StageEvent =
       readonly tick: number;
       readonly tile: TileCoord;
       readonly kind: PowerUpKind;
+      readonly owner: string;
       readonly points: number;
     }
   | {
@@ -207,8 +242,7 @@ export type StageEvent =
       readonly type: 'player-hit';
       readonly tick: number;
       readonly tile: TileCoord;
-      /** Extend this union as new hazards arrive (rival contact). */
-      readonly cause: 'blast';
+      readonly cause: 'blast' | 'contact';
     }
   | {
       readonly type: 'life-lost';
@@ -220,6 +254,29 @@ export type StageEvent =
       readonly tick: number;
       readonly tile: TileCoord;
       readonly invulnerableTicks: number;
+    }
+  | {
+      readonly type: 'rival-hit';
+      readonly tick: number;
+      readonly rivalId: string;
+      readonly rivalName: string;
+      readonly tile: TileCoord;
+      readonly absorbed: boolean;
+    }
+  | {
+      readonly type: 'rival-defeated';
+      readonly tick: number;
+      readonly rivalId: string;
+      readonly rivalName: string;
+      readonly tile: TileCoord;
+      readonly points: number;
+    }
+  | {
+      readonly type: 'stage-cleared';
+      readonly tick: number;
+      readonly stage: number;
+      readonly score: number;
+      readonly elapsedTicks: number;
     }
   | {
       readonly type: 'game-over';

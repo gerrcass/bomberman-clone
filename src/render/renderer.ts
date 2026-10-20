@@ -1,6 +1,7 @@
 import {
   type Direction,
   type PowerUpKind,
+  type RivalState,
   type StageEvent,
   type StageState,
   TILE_SIZE,
@@ -62,6 +63,7 @@ export function createArenaRenderer(canvas: HTMLCanvasElement): ArenaRenderer {
       drawBlasts(context, state, sprites);
       drawPowerUps(context, state, sprites);
       drawBrickParticles(context, state, particles);
+      drawRivals(context, state, sprites);
       drawPlayer(context, state, sprites);
     },
   };
@@ -217,6 +219,61 @@ function drawBrickParticles(
   }
 
   context.globalAlpha = 1;
+}
+
+function drawRivals(
+  context: CanvasRenderingContext2D,
+  state: StageState,
+  sprites: SpriteSet,
+): void {
+  for (const rival of state.rivals) {
+    if (rival.alive) {
+      drawRival(context, state, sprites, rival);
+    }
+  }
+}
+
+function drawRival(
+  context: CanvasRenderingContext2D,
+  state: StageState,
+  sprites: SpriteSet,
+  rival: RivalState,
+): void {
+  const frames = sprites.rivals[rival.id];
+  if (frames === undefined) {
+    return;
+  }
+
+  const pixelX = Math.round(rival.position.x * TILE_SIZE);
+  const pixelY = Math.round(rival.position.y * TILE_SIZE);
+  const frame = rival.moving
+    ? Math.floor(state.tick / 6) % 2 === 0
+      ? frames.walkA
+      : frames.walkB
+    : frames.idle;
+
+  context.save();
+  context.fillStyle = 'rgba(0, 0, 0, 0.35)';
+  context.beginPath();
+  context.ellipse(pixelX + TILE_SIZE / 2, pixelY + TILE_SIZE - 7, 13, 5, 0, 0, Math.PI * 2);
+  context.fill();
+  context.restore();
+
+  if (rival.invulnerableTicks > 0 && Math.floor(state.tick / 4) % 2 === 0) {
+    context.globalAlpha = 0.5;
+  }
+  context.drawImage(frame, pixelX, pixelY, TILE_SIZE, TILE_SIZE);
+  context.globalAlpha = 1;
+
+  context.save();
+  context.font = 'bold 10px "Courier New", ui-monospace, monospace';
+  context.textAlign = 'center';
+  context.textBaseline = 'bottom';
+  context.fillStyle = '#05070d';
+  context.fillText(rival.name.toUpperCase(), pixelX + TILE_SIZE / 2 + 1, pixelY - 1 + 1);
+  context.fillStyle = rival.color;
+  context.fillText(rival.name.toUpperCase(), pixelX + TILE_SIZE / 2, pixelY - 1);
+  context.restore();
 }
 
 function drawPlayer(

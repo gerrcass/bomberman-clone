@@ -1,9 +1,22 @@
 import {
+  decideRivalAction,
+  RIVAL_CONTACT_RANGE,
+  RIVAL_ROSTER,
+  type RivalConfig,
+  type RivalView,
+  type RivalWorld,
+  rivalBlastRangeForStage,
+  rivalBombCapacityForStage,
+  rivalReactionTicks,
+  rivalSpeedForStage,
+} from './ai';
+import {
   generateArena,
   isWalkable,
   type ParsedArena,
   PLAYER_SPAWN,
   parseAsciiArena,
+  RIVAL_SPAWNS,
   SPAWN_CORNERS,
   tileAt,
 } from './arena';
@@ -25,6 +38,7 @@ import {
   SHIELD_INVULNERABILITY_TICKS,
   speedForStacks,
 } from './powerups';
+import { createRng } from './rng';
 import {
   type ArenaState,
   BASE_BLAST_RANGE,
@@ -44,6 +58,8 @@ import {
   type PowerUpState,
   RESPAWN_DELAY_TICKS,
   RESPAWN_INVULNERABILITY_TICKS,
+  RIVAL_POINTS,
+  type RivalState,
   STARTING_LIVES,
   type StageEvent,
   type StageState,
@@ -82,6 +98,10 @@ export interface StageOptions {
    * immediately.
    */
   readonly hiddenPowerUps?: readonly HiddenPowerUp[];
+  /** Rivals to spawn; generated stages use two (three from stage 4). */
+  readonly rivalCount?: number;
+  /** Explicit rival spawn tiles, primarily for deterministic fixtures. */
+  readonly rivalSpawns?: readonly TileCoord[];
 }
 
 /**
@@ -119,6 +139,20 @@ interface MutableBlast {
   readonly tile: TileCoord;
   remainingTicks: number;
   readonly sourceBombId: number;
+}
+
+interface MutableRival {
+  readonly config: RivalConfig;
+  movement: MovementState;
+  alive: boolean;
+  invulnerableTicks: number;
+  bombCapacity: number;
+  blastRange: number;
+  speedTier: number;
+  shieldCharges: number;
+  desiredDirection: Direction | null;
+  bombIntent: boolean;
+  nextDecisionTick: number;
 }
 
 const BLAST_DIRECTIONS: readonly Direction[] = ['up', 'down', 'left', 'right'];
@@ -166,6 +200,8 @@ export function createStage(options: StageOptions): Stage {
   let nextBombId = 1;
 
   const respawnCorners = resolveRespawnCorners(arena.arena, spawn);
+  const aiRng = createRng((options.seed ^ 0x9e37_79b9) >>> 0);
+  const rivals: MutableRival[] = createRivals();
 
   let tick = 0;
   let lives = startingLives;
@@ -175,6 +211,9 @@ export function createStage(options: StageOptions): Stage {
   let invulnerableTicks = 0;
   let respawnTicks = 0;
   let respawnTile: TileCoord | null = null;
+  let bricksDestroyed = 0;
+  let rivalsDefeated = 0;
+  let powerUpsCollected = 0;
 
   return {
     tick(intent: Intent = {}): readonly StageEvent[] {
@@ -214,13 +253,24 @@ export function createStage(options: StageOptions): Stage {
           },
         });
       }
+
+      tickRivals(events);
       resolveBombs(events);
 
       if (playerAlive) {
         collectPowerUps(events);
       }
+      collectRivalPowerUps(events);
+      checkRivalBlastHits(events);
+
       if (playerAlive && invulnerableTicks === 0 && blastAt(movement.to.x, movement.to.y)) {
-        hitPlayer(events);
+        hitPlayer(events, 'blast');
+      }
+      if (playerAlive) {
+        checkRivalContact(events);
+      }
+      if (status === 'playing' && rivals.length > 0 && rivals.every((rival) => !rival.alive)) {
+        clearStage(events);
       }
 
       return events;
@@ -253,6 +303,12 @@ export function createStage(options: StageOptions): Stage {
         powerUps: [...powerUps.values()]
           .sort((a, b) => a.tile.y - b.tile.y || a.tile.x - b.tile.x)
           .map((powerUp) => ({ tile: { ...powerUp.tile }, kind: powerUp.kind })),
+        rivals: rivals.map(snapshotRival),
+        stats: {
+          bricksDestroyed,
+          rivalsDefeated,
+          powerUpsCollected,
+        },
       };
     },
   };
@@ -270,7 +326,7 @@ export function createStage(options: StageOptions): Stage {
     return blasts.has(tileKey(x, y));
   }
 
-  function hitPlayer(events: StageEvent[]): void {
+  function hitPlayer(events: StageEvent[], cause: 'blast' | 'contact'): void {
     const tile = { ...movement.to };
 
     if (shieldCharges > 0) {
@@ -290,7 +346,7 @@ export function createStage(options: StageOptions): Stage {
     invulnerableTicks = 0;
     respawnTile = null;
 
-    events.push({ type: 'player-hit', tick, tile: { ...tile }, cause: 'blast' });
+    events.push({ type: 'player-hit', tick, tile: { ...tile }, cause });
     events.push({ type: 'life-lost', tick, livesRemaining: lives });
 
     if (lives <= 0) {
@@ -302,7 +358,7 @@ export function createStage(options: StageOptions): Stage {
     }
 
     respawnTicks = RESPAWN_DELAY_TICKS;
-    // Lock in the safest corner now, while the killing blast is still live.
+    // Lock in the safest corner now, while the killing hazard is still live.
     // Invulnerability covers anything that changes during the delay.
     respawnTile = chooseRespawnTile();
   }
@@ -315,6 +371,7 @@ export function createStage(options: StageOptions): Stage {
     }
 
     powerUps.delete(key);
+    powerUpsCollected += 1;
     switch (powerUp.kind) {
       case 'bomb':
         bombCapacity = Math.min(MAX_BOMB_CAPACITY, bombCapacity + 1);
@@ -337,7 +394,296 @@ export function createStage(options: StageOptions): Stage {
       tick,
       tile: { ...powerUp.tile },
       kind: powerUp.kind,
+      owner: PLAYER_BOMBER_ID,
       points,
+    });
+  }
+
+  function collectRivalPowerUps(events: StageEvent[]): void {
+    for (const rival of rivals) {
+      if (!rival.alive) {
+        continue;
+      }
+      const key = tileKey(rival.movement.to.x, rival.movement.to.y);
+      const powerUp = powerUps.get(key);
+      if (powerUp === undefined) {
+        continue;
+      }
+
+      powerUps.delete(key);
+      switch (powerUp.kind) {
+        case 'bomb':
+          rival.bombCapacity = Math.min(MAX_BOMB_CAPACITY, rival.bombCapacity + 1);
+          break;
+        case 'fire':
+          rival.blastRange = Math.min(MAX_BLAST_RANGE, rival.blastRange + 1);
+          break;
+        case 'speed':
+          rival.speedTier = Math.min(MAX_SPEED_STACKS, rival.speedTier + 1);
+          rival.movement.speed = speedForStacks(rivalSpeedForStage(stageNumber), rival.speedTier);
+          break;
+        case 'shield':
+          rival.shieldCharges = Math.min(MAX_SHIELD_CHARGES, rival.shieldCharges + 1);
+          break;
+      }
+
+      events.push({
+        type: 'power-up-collected',
+        tick,
+        tile: { ...powerUp.tile },
+        kind: powerUp.kind,
+        owner: rival.config.id,
+        points: 0,
+      });
+    }
+  }
+
+  function createRivals(): MutableRival[] {
+    const defaultCount = options.arena === undefined ? (stageNumber >= 4 ? 3 : 2) : 0;
+    const requested = Math.max(0, Math.floor(options.rivalCount ?? defaultCount));
+    const fixtureSpawns = parsed.rivalSpawns ?? [];
+    const candidates =
+      options.rivalSpawns ??
+      (fixtureSpawns.length > 0
+        ? fixtureSpawns
+        : RIVAL_SPAWNS.filter(
+            (corner) =>
+              !(corner.x === spawn.x && corner.y === spawn.y) &&
+              isWalkable(arena.arena, corner.x, corner.y),
+          ));
+    const created: MutableRival[] = [];
+
+    for (let index = 0; index < Math.min(requested, candidates.length); index += 1) {
+      const tile = candidates[index];
+      const config = RIVAL_ROSTER[index];
+      if (tile === undefined || config === undefined || !isWalkable(arena.arena, tile.x, tile.y)) {
+        continue;
+      }
+
+      created.push({
+        config,
+        movement: createMovementState(
+          { x: tile.x, y: tile.y },
+          'down',
+          rivalSpeedForStage(stageNumber),
+        ),
+        alive: true,
+        invulnerableTicks: 0,
+        bombCapacity: rivalBombCapacityForStage(stageNumber),
+        blastRange: rivalBlastRangeForStage(stageNumber),
+        speedTier: 0,
+        shieldCharges: 0,
+        desiredDirection: null,
+        bombIntent: false,
+        nextDecisionTick: rivalReactionTicks(stageNumber, config.personality),
+      });
+    }
+
+    return created;
+  }
+
+  function tickRivals(events: StageEvent[]): void {
+    for (const rival of rivals) {
+      if (!rival.alive) {
+        continue;
+      }
+      if (rival.invulnerableTicks > 0) {
+        rival.invulnerableTicks -= 1;
+      }
+
+      if (tick >= rival.nextDecisionTick) {
+        rival.nextDecisionTick = tick + rivalReactionTicks(stageNumber, rival.config.personality);
+        const decision = decideRivalAction(rivalView(rival), rivalWorld());
+        rival.desiredDirection = decision.direction;
+        rival.bombIntent = decision.bomb;
+      }
+
+      if (rival.bombIntent && !isMoving(rival.movement)) {
+        placeRivalBomb(rival, events);
+        rival.bombIntent = false;
+        rival.desiredDirection = null;
+        // Re-decide almost immediately so the rival leaves its own blast.
+        rival.nextDecisionTick = tick + 3;
+      }
+
+      tickMovement(rival.movement, rival.desiredDirection, canRivalEnter, {
+        onStep: (tile) => {
+          // Rival steps are observable for future audio/effects; the renderer
+          // already consumes interpolated state.
+          void tile;
+        },
+      });
+    }
+  }
+
+  function rivalView(rival: MutableRival): RivalView {
+    const moving = isMoving(rival.movement);
+    return {
+      id: rival.config.id,
+      name: rival.config.name,
+      color: rival.config.color,
+      personality: rival.config.personality,
+      tile: moving ? { ...rival.movement.from } : { ...rival.movement.to },
+      from: { ...rival.movement.from },
+      to: { ...rival.movement.to },
+      moving,
+      bombCapacity: rival.bombCapacity,
+      blastRange: rival.blastRange,
+      speedTier: rival.speedTier,
+      shieldCharges: rival.shieldCharges,
+      invulnerableTicks: rival.invulnerableTicks,
+    };
+  }
+
+  function rivalWorld(): RivalWorld {
+    return {
+      arena: arena.arena,
+      bombs: bombs.map(snapshotBomb),
+      blasts: [...blasts.values()].map(snapshotBlast),
+      powerUps: [...powerUps.values()].map((powerUp) => ({
+        tile: { ...powerUp.tile },
+        kind: powerUp.kind,
+      })),
+      rivals: rivals.filter((rival) => rival.alive).map(rivalView),
+      player: playerAlive ? { ...movement.to } : null,
+      playerAlive,
+      tick,
+      stage: stageNumber,
+      rng: aiRng,
+    };
+  }
+
+  function placeRivalBomb(rival: MutableRival, events: StageEvent[]): void {
+    const active = bombs.filter((bomb) => bomb.owner === rival.config.id).length;
+    if (active >= rival.bombCapacity) {
+      return;
+    }
+
+    const target = isMoving(rival.movement) ? rival.movement.from : rival.movement.to;
+    if (bombAt(target.x, target.y) !== null) {
+      return;
+    }
+
+    const bomb: MutableBomb = {
+      id: nextBombId,
+      tile: { ...target },
+      owner: rival.config.id,
+      fuseTicks,
+      fuseRemainingTicks: fuseTicks,
+      range: rival.blastRange,
+      placedAtTick: tick,
+    };
+    nextBombId += 1;
+    bombs.push(bomb);
+    events.push({
+      type: 'bomb-placed',
+      tick,
+      bombId: bomb.id,
+      tile: { ...bomb.tile },
+      owner: bomb.owner,
+      fuseTicks: bomb.fuseTicks,
+      range: bomb.range,
+    });
+  }
+
+  function checkRivalBlastHits(events: StageEvent[]): void {
+    for (const rival of rivals) {
+      if (!rival.alive) {
+        continue;
+      }
+      const tile = rival.movement.to;
+      if (blastAt(tile.x, tile.y)) {
+        hitRival(rival, events);
+      }
+    }
+  }
+
+  function hitRival(rival: MutableRival, events: StageEvent[]): void {
+    const tile = { ...rival.movement.to };
+    if (rival.shieldCharges > 0) {
+      rival.shieldCharges -= 1;
+      rival.invulnerableTicks = SHIELD_INVULNERABILITY_TICKS;
+      events.push({
+        type: 'rival-hit',
+        tick,
+        rivalId: rival.config.id,
+        rivalName: rival.config.name,
+        tile,
+        absorbed: true,
+      });
+      return;
+    }
+
+    rival.alive = false;
+    rivalsDefeated += 1;
+    const points = award(RIVAL_POINTS);
+    events.push({
+      type: 'rival-hit',
+      tick,
+      rivalId: rival.config.id,
+      rivalName: rival.config.name,
+      tile,
+      absorbed: false,
+    });
+    events.push({
+      type: 'rival-defeated',
+      tick,
+      rivalId: rival.config.id,
+      rivalName: rival.config.name,
+      tile,
+      points,
+    });
+  }
+
+  function checkRivalContact(events: StageEvent[]): void {
+    if (invulnerableTicks > 0) {
+      return;
+    }
+    const playerPosition = playerSnapshotPosition();
+    for (const rival of rivals) {
+      if (!rival.alive) {
+        continue;
+      }
+      const rivalPosition = rivalSnapshotPosition(rival);
+      const distance = Math.hypot(
+        playerPosition.x - rivalPosition.x,
+        playerPosition.y - rivalPosition.y,
+      );
+      if (distance <= RIVAL_CONTACT_RANGE) {
+        hitPlayer(events, 'contact');
+        return;
+      }
+    }
+  }
+
+  function playerSnapshotPosition(): { x: number; y: number } {
+    return {
+      x: movement.from.x + (movement.to.x - movement.from.x) * movement.progress,
+      y: movement.from.y + (movement.to.y - movement.from.y) * movement.progress,
+    };
+  }
+
+  function rivalSnapshotPosition(rival: MutableRival): { x: number; y: number } {
+    return {
+      x:
+        rival.movement.from.x +
+        (rival.movement.to.x - rival.movement.from.x) * rival.movement.progress,
+      y:
+        rival.movement.from.y +
+        (rival.movement.to.y - rival.movement.from.y) * rival.movement.progress,
+    };
+  }
+
+  function clearStage(events: StageEvent[]): void {
+    status = 'cleared';
+    respawnTicks = 0;
+    respawnTile = null;
+    events.push({
+      type: 'stage-cleared',
+      tick,
+      stage: stageNumber,
+      score,
+      elapsedTicks: tick,
     });
   }
 
@@ -388,6 +734,10 @@ export function createStage(options: StageOptions): Stage {
 
   function canEnter(x: number, y: number): boolean {
     return isWalkable(arena.arena, x, y) && bombAt(x, y) === null;
+  }
+
+  function canRivalEnter(x: number, y: number): boolean {
+    return canEnter(x, y);
   }
 
   function bombAt(x: number, y: number): MutableBomb | null {
@@ -542,6 +892,7 @@ export function createStage(options: StageOptions): Stage {
     }
 
     tiles[index] = 'floor';
+    bricksDestroyed += 1;
     const points = award(BRICK_POINTS);
     events.push({ type: 'brick-destroyed', tick, tile: { x, y }, points });
 
@@ -632,6 +983,36 @@ function snapshotPlayer(
     alive,
     invulnerableTicks,
     respawnTicks,
+  };
+}
+
+function snapshotRival(rival: MutableRival): RivalState {
+  const moving = isMoving(rival.movement);
+  return {
+    id: rival.config.id,
+    name: rival.config.name,
+    color: rival.config.color,
+    personality: rival.config.personality,
+    tile: moving ? { ...rival.movement.from } : { ...rival.movement.to },
+    from: { ...rival.movement.from },
+    to: { ...rival.movement.to },
+    progress: rival.movement.progress,
+    position: {
+      x:
+        rival.movement.from.x +
+        (rival.movement.to.x - rival.movement.from.x) * rival.movement.progress,
+      y:
+        rival.movement.from.y +
+        (rival.movement.to.y - rival.movement.from.y) * rival.movement.progress,
+    },
+    direction: rival.movement.direction,
+    moving,
+    alive: rival.alive,
+    bombCapacity: rival.bombCapacity,
+    blastRange: rival.blastRange,
+    speedTier: rival.speedTier,
+    shieldCharges: rival.shieldCharges,
+    invulnerableTicks: rival.invulnerableTicks,
   };
 }
 

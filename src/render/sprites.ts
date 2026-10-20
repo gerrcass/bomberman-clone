@@ -69,6 +69,39 @@ const PLAYER_PALETTE: Palette = {
   '3': '#eaffff',
 };
 
+const CINDER_PALETTE: Palette = {
+  '0': '#2b0606',
+  '1': '#8e1b1b',
+  '2': '#ff5c5c',
+  '3': '#ffe0e0',
+};
+
+const SPARK_PALETTE: Palette = {
+  '0': '#2b1d05',
+  '1': '#a86b10',
+  '2': '#ffb347',
+  '3': '#fff2cf',
+};
+
+const VEX_PALETTE: Palette = {
+  '0': '#1b0b2b',
+  '1': '#5b2b8e',
+  '2': '#b07cff',
+  '3': '#efe2ff',
+};
+
+const RIVAL_PALETTES: Readonly<Record<string, Palette>> = {
+  cinder: CINDER_PALETTE,
+  spark: SPARK_PALETTE,
+  vex: VEX_PALETTE,
+};
+
+export interface BomberSprites {
+  readonly idle: HTMLCanvasElement;
+  readonly walkA: HTMLCanvasElement;
+  readonly walkB: HTMLCanvasElement;
+}
+
 const BOMB = [
   '................',
   '.......4........',
@@ -252,6 +285,7 @@ export interface SpriteSet {
   readonly playerIdle: HTMLCanvasElement;
   readonly playerWalkA: HTMLCanvasElement;
   readonly playerWalkB: HTMLCanvasElement;
+  readonly rivals: Readonly<Record<string, BomberSprites>>;
 }
 
 type TerrainKind = 'floor' | 'wall' | 'brick';
@@ -270,7 +304,20 @@ export function createSprites(): SpriteSet {
     playerIdle: createPixelSprite(PLAYER_IDLE, PLAYER_PALETTE, SPRITE_SCALE),
     playerWalkA: createPixelSprite(PLAYER_WALK_A, PLAYER_PALETTE, SPRITE_SCALE),
     playerWalkB: createPixelSprite(PLAYER_WALK_B, PLAYER_PALETTE, SPRITE_SCALE),
+    rivals: createRivalSprites(),
   };
+}
+
+function createRivalSprites(): Readonly<Record<string, BomberSprites>> {
+  const sprites: Record<string, BomberSprites> = {};
+  for (const [id, palette] of Object.entries(RIVAL_PALETTES)) {
+    sprites[id] = {
+      idle: createPixelSprite(PLAYER_IDLE, palette, SPRITE_SCALE),
+      walkA: createPixelSprite(PLAYER_WALK_A, palette, SPRITE_SCALE),
+      walkB: createPixelSprite(PLAYER_WALK_B, palette, SPRITE_SCALE),
+    };
+  }
+  return sprites;
 }
 
 export function spriteSize(): number {

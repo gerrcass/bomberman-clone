@@ -23,11 +23,14 @@ const ASCII_WALL = '#';
 const ASCII_FLOOR = '.';
 const ASCII_BRICK = 'B';
 const ASCII_PLAYER = 'P';
+const ASCII_RIVAL = 'R';
 
 export interface ParsedArena {
   readonly arena: ArenaState;
   /** Player spawn declared by a `P` marker, when the fixture has one. */
   readonly spawn: TileCoord | null;
+  /** Rival spawns declared by `R` markers, in reading order. */
+  readonly rivalSpawns?: readonly TileCoord[];
 }
 
 export function inBounds(arena: ArenaState, x: number, y: number): boolean {
@@ -130,6 +133,7 @@ export function parseAsciiArena(rows: readonly string[]): ParsedArena {
 
   const width = firstRow.length;
   const tiles: TileKind[] = [];
+  const rivalSpawns: TileCoord[] = [];
   let spawn: TileCoord | null = null;
 
   for (let y = 0; y < height; y += 1) {
@@ -162,13 +166,18 @@ export function parseAsciiArena(rows: readonly string[]): ParsedArena {
           spawn = { x, y };
           tiles.push('floor');
           break;
+        case ASCII_RIVAL:
+        case ASCII_RIVAL.toLowerCase():
+          rivalSpawns.push({ x, y });
+          tiles.push('floor');
+          break;
         default:
           throw new Error(`Unknown arena fixture glyph "${glyph ?? ''}" at ${x},${y}`);
       }
     }
   }
 
-  return { arena: { width, height, tiles }, spawn };
+  return { arena: { width, height, tiles }, spawn, rivalSpawns };
 }
 
 /** Renders terrain back to ASCII. Spawn markers are not part of the terrain. */

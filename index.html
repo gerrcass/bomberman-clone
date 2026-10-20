@@ -48,8 +48,8 @@
             <span id="hud-shield" class="hud-value">0</span>
           </div>
           <div class="hud-stat">
-            <span class="hud-label">Fuse</span>
-            <span id="hud-fuse" class="hud-value">2.2s</span>
+            <span class="hud-label">Rivals</span>
+            <span id="hud-rivals" class="hud-value">0</span>
           </div>
         </header>
 
@@ -110,6 +110,13 @@
                 Final score
                 <span id="gameover-score" class="gameover-score">000000</span>
               </p>
+              <p class="gameover-stage">Reached stage <span id="gameover-stage">1</span></p>
+              <dl class="run-stats">
+                <div><dt>Bricks</dt><dd id="gameover-bricks">0</dd></div>
+                <div><dt>Rivals</dt><dd id="gameover-rivals">0</dd></div>
+                <div><dt>Pickups</dt><dd id="gameover-pickups">0</dd></div>
+                <div><dt>Time</dt><dd id="gameover-time">0:00</dd></div>
+              </dl>
               <div class="pause-actions">
                 <button id="retry-button" class="button button-primary" type="button">
                   Retry Run
@@ -118,6 +125,32 @@
               </div>
               <p class="controls-hint"><kbd>Tab</kbd> choose<span class="hint-sep">·</span><kbd>Enter</kbd> confirm</p>
             </div>
+          </section>
+
+          <section
+            id="intermission-screen"
+            class="screen intermission-screen"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="intermission-title"
+            hidden
+          >
+            <div class="intermission-panel">
+              <p class="eyebrow">Stage clear</p>
+              <h2 id="intermission-title" class="pause-title">Choose an upgrade</h2>
+              <p id="intermission-summary" class="intermission-summary"></p>
+              <div id="upgrade-cards" class="upgrade-cards"></div>
+              <p class="controls-hint">
+                <kbd>1</kbd>–<kbd>3</kbd> or <kbd>Tab</kbd> +
+                <kbd>Enter</kbd> choose
+              </p>
+            </div>
+          </section>
+
+          <section id="stage-intro" class="stage-intro" aria-live="polite" hidden>
+            <p class="eyebrow">Stage</p>
+            <p id="stage-intro-stage" class="stage-intro-number">1</p>
+            <p id="stage-intro-rivals" class="stage-intro-rivals">2 rivals</p>
           </section>
         </div>
       </section>
