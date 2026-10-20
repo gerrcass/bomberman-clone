@@ -1,3 +1,4 @@
+import { createAudio } from '../audio/audio';
 import {
   createRun,
   createStage,
@@ -95,6 +96,7 @@ export function createGameApp(doc: Document): GameApp {
   const titleButton = requireElement<HTMLButtonElement>(doc, '#title-button');
 
   const renderer: ArenaRenderer = createArenaRenderer(canvas);
+  const audio = createAudio(win);
 
   const storage = safeStorage(win);
   let profile = loadProfile(storage);
@@ -107,8 +109,8 @@ export function createGameApp(doc: Document): GameApp {
   let introTicks = 0;
   let runRecorded = false;
   let settingsReturn: 'title' | 'paused' = 'title';
-  const quitArmed = false;
-  const quitTimer: number | null = null;
+  let quitArmed = false;
+  let quitTimer: number | null = null;
 
   applySettings();
   syncSettingsInputs();
@@ -120,6 +122,10 @@ export function createGameApp(doc: Document): GameApp {
         pauseGame();
       } else if (screen === 'paused') {
         resumeGame();
+      } else if (screen === 'settings') {
+        closeSettings();
+      } else if (screen === 'howto') {
+        closeHowTo();
       }
     },
   });
@@ -133,6 +139,8 @@ export function createGameApp(doc: Document): GameApp {
   function applySettings(): void {
     doc.documentElement.dataset['reducedMotion'] = String(profile.settings.reducedMotion);
     doc.documentElement.dataset['highContrast'] = String(profile.settings.highContrast);
+    audio.setSettings(profile.settings);
+    renderer.setPreferences(profile.settings);
   }
 
   function syncSettingsInputs(): void {
@@ -236,9 +244,13 @@ export function createGameApp(doc: Document): GameApp {
   function startRun(): void {
     run = createRun(Date.now() >>> 0);
     titleStage = createStage({ seed: TITLE_SEED, rivalCount: 0 }).getState();
+    runRecorded = false;
+    gameoverNewBest.hidden = true;
     screen = 'playing';
     titleScreen.hidden = true;
     pauseScreen.hidden = true;
+    howToScreen.hidden = true;
+    settingsScreen.hidden = true;
     intermissionScreen.hidden = true;
     gameoverScreen.hidden = true;
     hud.hidden = false;
@@ -268,6 +280,7 @@ export function createGameApp(doc: Document): GameApp {
     if (screen !== 'playing') {
       return;
     }
+    resetQuitConfirmation();
     screen = 'paused';
     pauseScreen.hidden = false;
     input.setGameplayEnabled(false);
@@ -279,6 +292,7 @@ export function createGameApp(doc: Document): GameApp {
     if (screen !== 'paused') {
       return;
     }
+    resetQuitConfirmation();
     screen = 'playing';
     pauseScreen.hidden = true;
     input.setGameplayEnabled(true);
@@ -395,6 +409,9 @@ export function createGameApp(doc: Document): GameApp {
     setText(gameoverRivals, String(state.stats.rivalsDefeated));
     setText(gameoverPickups, String(state.stats.powerUpsCollected));
     setText(gameoverTime, formatTime(state.stats.elapsedTicks));
+    const isRealGameOver = state.stageState.status === 'gameover';
+    const newBest = isRealGameOver ? recordFinishedRun(state) : false;
+    gameoverNewBest.hidden = !newBest;
     input.setGameplayEnabled(false);
     accumulator = 0;
     retryButton.focus();
@@ -403,10 +420,15 @@ export function createGameApp(doc: Document): GameApp {
   function quitToTitle(): void {
     if (screen === 'playing' || screen === 'paused' || screen === 'intermission') {
       run.quit();
+      recordFinishedRun(run.getState());
     }
+    quitArmed = false;
+    quitButton.textContent = 'Quit Run';
     titleStage = createStage({ seed: TITLE_SEED, rivalCount: 0 }).getState();
     screen = 'title';
     pauseScreen.hidden = true;
+    howToScreen.hidden = true;
+    settingsScreen.hidden = true;
     intermissionScreen.hidden = true;
     gameoverScreen.hidden = true;
     stageIntro.hidden = true;
@@ -414,6 +436,7 @@ export function createGameApp(doc: Document): GameApp {
     titleScreen.hidden = false;
     input.setGameplayEnabled(false);
     accumulator = 0;
+    renderTitleBest();
     playButton.focus();
   }
 
@@ -465,6 +488,9 @@ export function createGameApp(doc: Document): GameApp {
       accumulator = 0;
     }
 
+    if (frameEvents.length > 0) {
+      audio.playEvents(frameEvents);
+    }
     renderer.render(displayStage(), frameEvents);
     win.requestAnimationFrame(frame);
   }
@@ -480,7 +506,7 @@ export function createGameApp(doc: Document): GameApp {
       return;
     }
 
-    const focusable = [resumeButton, quitButton];
+    const focusable = [resumeButton, pauseSettingsButton, quitButton];
     const currentIndex = focusable.indexOf(doc.activeElement as HTMLButtonElement);
     const delta = event.shiftKey ? -1 : 1;
     const nextIndex =
@@ -519,13 +545,83 @@ export function createGameApp(doc: Document): GameApp {
     }
   }
 
+  function resetQuitConfirmation(): void {
+    quitArmed = false;
+    quitButton.textContent = 'Quit Run';
+    if (quitTimer !== null) {
+      win.clearTimeout(quitTimer);
+      quitTimer = null;
+    }
+  }
+
+  function onQuitClick(): void {
+    if (screen !== 'paused') {
+      return;
+    }
+    if (!quitArmed) {
+      quitArmed = true;
+      quitButton.textContent = 'Confirm Quit';
+      quitTimer = win.setTimeout(resetQuitConfirmation, 2500);
+      return;
+    }
+    resetQuitConfirmation();
+    quitToTitle();
+  }
+
+  function onSettingChange(): void {
+    saveSettings({
+      sound: settingSound.checked,
+      music: settingMusic.checked,
+      screenShake: settingShake.checked,
+      reducedMotion: settingReducedMotion.checked,
+      highContrast: settingHighContrast.checked,
+    });
+  }
+
+  function onGlobalKeyDown(event: KeyboardEvent): void {
+    if (
+      event.key.toLowerCase() === 'm' &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      (screen === 'playing' || screen === 'paused')
+    ) {
+      const muted = !(profile.settings.sound || profile.settings.music);
+      saveSettings({ sound: !muted, music: !muted });
+      syncSettingsInputs();
+      return;
+    }
+    if (event.key === 'Escape' && screen === 'howto') {
+      event.preventDefault();
+      closeHowTo();
+      return;
+    }
+    if (event.key === 'Escape' && screen === 'settings') {
+      event.preventDefault();
+      closeSettings();
+      return;
+    }
+    onIntermissionKeyDown(event);
+  }
+
   playButton.addEventListener('click', startRun);
   resumeButton.addEventListener('click', resumeGame);
-  quitButton.addEventListener('click', quitToTitle);
+  quitButton.addEventListener('click', onQuitClick);
   retryButton.addEventListener('click', startRun);
   titleButton.addEventListener('click', quitToTitle);
+  howToButton.addEventListener('click', openHowTo);
+  howToBackButton.addEventListener('click', closeHowTo);
+  settingsButton.addEventListener('click', () => openSettings('title'));
+  pauseSettingsButton.addEventListener('click', () => openSettings('paused'));
+  settingsBackButton.addEventListener('click', closeSettings);
+  settingSound.addEventListener('change', onSettingChange);
+  settingMusic.addEventListener('change', onSettingChange);
+  settingShake.addEventListener('change', onSettingChange);
+  settingReducedMotion.addEventListener('change', onSettingChange);
+  settingHighContrast.addEventListener('change', onSettingChange);
   pauseScreen.addEventListener('keydown', onPauseScreenKeyDown);
-  doc.addEventListener('keydown', onIntermissionKeyDown);
+  doc.addEventListener('keydown', onGlobalKeyDown);
+  win.addEventListener('pointerdown', () => audio.unlock(), { once: true });
+  win.addEventListener('keydown', () => audio.unlock(), { once: true });
   doc.addEventListener('visibilitychange', onVisibilityChange);
   win.addEventListener('resize', fitCanvas);
 
@@ -537,6 +633,7 @@ export function createGameApp(doc: Document): GameApp {
       __bombBlitzDebug?: {
         showIntermission(): void;
         showGameOver(): void;
+        forceRunOver(): void;
         state(): unknown;
       };
     };
@@ -557,6 +654,13 @@ export function createGameApp(doc: Document): GameApp {
             elapsedTicks: 300,
           },
         });
+      },
+      forceRunOver(): void {
+        if (run.getState().status !== 'gameover') {
+          run.quit();
+          recordFinishedRun(run.getState());
+        }
+        showGameOver(run.getState());
       },
       state(): unknown {
         const state = run.getState();
@@ -612,6 +716,14 @@ function formatTime(ticks: number): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+function safeStorage(win: Window): StorageLike | null {
+  try {
+    return win.localStorage;
+  } catch {
+    return null;
+  }
 }
 
 function requireElement<T extends Element>(doc: Document, selector: string): T {

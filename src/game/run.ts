@@ -141,9 +141,11 @@ export function createRun(seed: number, options: RunOptions = {}): Run {
       if (status === 'gameover') {
         return;
       }
-      const stageState = stage.getState();
-      score = stageState.score;
-      completedStats = addStats(completedStats, stageState.stats, stageState.tick);
+      if (status === 'playing') {
+        const stageState = stage.getState();
+        score = stageState.score;
+        completedStats = addStats(completedStats, stageState.stats, stageState.tick);
+      }
       lives = 0;
       status = 'gameover';
       draft = [];

@@ -8,9 +8,16 @@ import {
 } from '../game';
 import { createSprites, type SpriteSet } from './sprites';
 
+export interface RenderPreferences {
+  readonly screenShake: boolean;
+  readonly reducedMotion: boolean;
+  readonly highContrast: boolean;
+}
+
 export interface ArenaRenderer {
   /** Draws one frame from read-only simulation state and this frame's events. */
   render(state: StageState, events?: readonly StageEvent[]): void;
+  setPreferences(preferences: RenderPreferences): void;
 }
 
 const BACKGROUND = '#070b13';
@@ -44,13 +51,28 @@ export function createArenaRenderer(canvas: HTMLCanvasElement): ArenaRenderer {
   context.imageSmoothingEnabled = false;
 
   let particles: BrickParticle[] = [];
+  let preferences: RenderPreferences = {
+    screenShake: true,
+    reducedMotion: false,
+    highContrast: false,
+  };
+  let shakeUntilTick = 0;
 
   return {
+    setPreferences(next: RenderPreferences): void {
+      preferences = next;
+    },
     render(state: StageState, events: readonly StageEvent[] = []): void {
       if (state.tick === 0) {
         particles = [];
+        shakeUntilTick = 0;
       }
-      spawnBrickParticles(events, particles);
+      for (const event of events) {
+        if (event.type === 'bomb-detonated' || event.type === 'player-hit') {
+          shakeUntilTick = Math.max(shakeUntilTick, event.tick + 13);
+        }
+      }
+      spawnParticles(events, particles, preferences.reducedMotion);
       particles = particles.filter((particle) => state.tick - particle.bornTick < PARTICLE_TICKS);
 
       context.imageSmoothingEnabled = false;
@@ -58,42 +80,94 @@ export function createArenaRenderer(canvas: HTMLCanvasElement): ArenaRenderer {
       context.fillStyle = BACKGROUND;
       context.fillRect(0, 0, canvas.width, canvas.height);
 
+      const shaking =
+        preferences.screenShake && !preferences.reducedMotion && state.tick < shakeUntilTick;
+      if (shaking) {
+        const strength = 3;
+        context.save();
+        context.translate(
+          Math.sin(state.tick * 2.7) * strength,
+          Math.cos(state.tick * 3.4) * strength * 0.7,
+        );
+      }
+
       drawTerrain(context, state, sprites);
-      drawBombs(context, state, sprites);
-      drawBlasts(context, state, sprites);
-      drawPowerUps(context, state, sprites);
+      if (preferences.highContrast) {
+        drawHighContrastTerrain(context, state);
+      }
+      drawBombs(context, state, sprites, preferences.reducedMotion);
+      drawBlasts(context, state, sprites, preferences.reducedMotion);
+      drawPowerUps(context, state, sprites, preferences.reducedMotion);
       drawBrickParticles(context, state, particles);
       drawRivals(context, state, sprites);
       drawPlayer(context, state, sprites);
+      if (preferences.highContrast) {
+        drawHighContrastHazards(context, state);
+      }
+
+      if (shaking) {
+        context.restore();
+      }
     },
   };
 }
 
-function spawnBrickParticles(events: readonly StageEvent[], particles: BrickParticle[]): void {
+function spawnParticles(
+  events: readonly StageEvent[],
+  particles: BrickParticle[],
+  reducedMotion: boolean,
+): void {
+  if (reducedMotion) {
+    return;
+  }
+
   for (const event of events) {
-    if (event.type !== 'brick-destroyed') {
+    if (event.type === 'brick-destroyed') {
+      spawnBurst(particles, event.tile, event.tick, BRICK_PARTICLES, '#cf7147', '#8b4324');
       continue;
     }
-
-    const seed = event.tile.x * 17 + event.tile.y * 31;
-    for (let index = 0; index < BRICK_PARTICLES; index += 1) {
-      const angle = (index / BRICK_PARTICLES) * Math.PI * 2 + (seed % 9) * 0.17;
-      const speed = 0.9 + ((seed + index * 7) % 5) * 0.35;
-      particles.push({
-        x: event.tile.x * TILE_SIZE + TILE_SIZE / 2,
-        y: event.tile.y * TILE_SIZE + TILE_SIZE / 2,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed - 1.2,
-        bornTick: event.tick,
-        color: index % 2 === 0 ? '#cf7147' : '#8b4324',
-      });
+    if (event.type === 'player-hit') {
+      spawnBurst(particles, event.tile, event.tick, 12, '#ff6b6b', '#ffd166');
+      continue;
+    }
+    if (event.type === 'rival-defeated') {
+      spawnBurst(particles, event.tile, event.tick, 14, '#b07cff', '#ffd166');
+      continue;
+    }
+    if (event.type === 'stage-cleared') {
+      // A short centre-arena flash; the stage overlay carries the detail.
+      const centre = { x: Math.floor((events.length % 15) + 7), y: 6 };
+      spawnBurst(particles, centre, event.tick, 20, '#ffd166', '#3fe0e6');
     }
   }
 
   // The renderer only consumes events; this guard keeps stale particles from
   // a previous stage from leaking into a fresh state.
-  if (particles.length > 200) {
-    particles.splice(0, particles.length - 200);
+  if (particles.length > 240) {
+    particles.splice(0, particles.length - 240);
+  }
+}
+
+function spawnBurst(
+  particles: BrickParticle[],
+  tile: { readonly x: number; readonly y: number },
+  tick: number,
+  count: number,
+  colorA: string,
+  colorB: string,
+): void {
+  const seed = tile.x * 17 + tile.y * 31;
+  for (let index = 0; index < count; index += 1) {
+    const angle = (index / count) * Math.PI * 2 + (seed % 9) * 0.17;
+    const speed = 0.9 + ((seed + index * 7) % 5) * 0.35;
+    particles.push({
+      x: tile.x * TILE_SIZE + TILE_SIZE / 2,
+      y: tile.y * TILE_SIZE + TILE_SIZE / 2,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 1.2,
+      bornTick: tick,
+      color: index % 2 === 0 ? colorA : colorB,
+    });
   }
 }
 
@@ -114,15 +188,56 @@ function drawTerrain(
   }
 }
 
-function drawBombs(context: CanvasRenderingContext2D, state: StageState, sprites: SpriteSet): void {
+function drawHighContrastTerrain(context: CanvasRenderingContext2D, state: StageState): void {
+  const { arena } = state;
+  for (let y = 0; y < arena.height; y += 1) {
+    for (let x = 0; x < arena.width; x += 1) {
+      const kind = arena.tiles[y * arena.width + x] ?? 'wall';
+      if (kind === 'floor') {
+        continue;
+      }
+      context.strokeStyle = kind === 'wall' ? '#b9ecff' : '#ffd166';
+      context.lineWidth = kind === 'wall' ? 2 : 1.5;
+      context.strokeRect(x * TILE_SIZE + 1, y * TILE_SIZE + 1, TILE_SIZE - 2, TILE_SIZE - 2);
+    }
+  }
+}
+
+function drawHighContrastHazards(context: CanvasRenderingContext2D, state: StageState): void {
+  context.strokeStyle = '#ffffff';
+  context.lineWidth = 2;
+  for (const blast of state.blasts) {
+    context.strokeRect(
+      blast.tile.x * TILE_SIZE + 2,
+      blast.tile.y * TILE_SIZE + 2,
+      TILE_SIZE - 4,
+      TILE_SIZE - 4,
+    );
+  }
+  for (const powerUp of state.powerUps) {
+    context.strokeRect(
+      powerUp.tile.x * TILE_SIZE + 5,
+      powerUp.tile.y * TILE_SIZE + 5,
+      TILE_SIZE - 10,
+      TILE_SIZE - 10,
+    );
+  }
+}
+
+function drawBombs(
+  context: CanvasRenderingContext2D,
+  state: StageState,
+  sprites: SpriteSet,
+  reducedMotion: boolean,
+): void {
   for (const bomb of state.bombs) {
     const centerX = bomb.tile.x * TILE_SIZE + TILE_SIZE / 2;
     const centerY = bomb.tile.y * TILE_SIZE + TILE_SIZE / 2;
     const elapsed = bomb.fuseTicks - bomb.fuseRemainingTicks;
-    const pulse = 1 + Math.sin((elapsed + bomb.id * 3) * 0.42) * 0.055;
+    const pulse = reducedMotion ? 1 : 1 + Math.sin((elapsed + bomb.id * 3) * 0.42) * 0.055;
     const size = TILE_SIZE * pulse;
 
-    if (bomb.fuseRemainingTicks <= 30 && Math.floor(state.tick / 4) % 2 === 0) {
+    if (!reducedMotion && bomb.fuseRemainingTicks <= 30 && Math.floor(state.tick / 4) % 2 === 0) {
       context.globalAlpha = 0.32;
       context.fillStyle = '#ff6b6b';
       context.beginPath();
@@ -145,12 +260,14 @@ function drawBlasts(
   context: CanvasRenderingContext2D,
   state: StageState,
   sprites: SpriteSet,
+  reducedMotion: boolean,
 ): void {
   for (const blast of state.blasts) {
     const pixelX = blast.tile.x * TILE_SIZE;
     const pixelY = blast.tile.y * TILE_SIZE;
-    const flicker =
-      0.84 + 0.16 * Math.sin((state.tick + blast.tile.x * 5 + blast.tile.y * 7) * 0.8);
+    const flicker = reducedMotion
+      ? 1
+      : 0.84 + 0.16 * Math.sin((state.tick + blast.tile.x * 5 + blast.tile.y * 7) * 0.8);
 
     context.globalAlpha = 0.24 * flicker;
     context.fillStyle = '#ff7a2f';
@@ -166,10 +283,13 @@ function drawPowerUps(
   context: CanvasRenderingContext2D,
   state: StageState,
   sprites: SpriteSet,
+  reducedMotion: boolean,
 ): void {
   for (const powerUp of state.powerUps) {
     const sprite = powerUpSprite(sprites, powerUp.kind);
-    const bob = Math.sin((state.tick + powerUp.tile.x * 7 + powerUp.tile.y * 13) / 14) * 2;
+    const bob = reducedMotion
+      ? 0
+      : Math.sin((state.tick + powerUp.tile.x * 7 + powerUp.tile.y * 13) / 14) * 2;
     const pixelX = powerUp.tile.x * TILE_SIZE;
     const pixelY = powerUp.tile.y * TILE_SIZE;
     const inset = TILE_SIZE * 0.14;
