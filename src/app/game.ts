@@ -398,6 +398,53 @@ export function createGameApp(doc: Document): GameApp {
   doc.addEventListener('visibilitychange', onVisibilityChange);
   win.addEventListener('resize', fitCanvas);
 
+  // Dev-only presentation harness for verifying the non-gameplay screens in a
+  // real browser. It renders the production DOM through the real screen
+  // functions but never changes simulation state.
+  if (import.meta.env.DEV) {
+    const debugWindow = win as Window & {
+      __bombBlitzDebug?: {
+        showIntermission(): void;
+        showGameOver(): void;
+      };
+    };
+    debugWindow.__bombBlitzDebug = {
+      showIntermission(): void {
+        const state = run.getState();
+        showIntermission({
+          ...state,
+          status: 'intermission',
+          lives: 2,
+          score: 3450,
+          draft: ['bomb', 'fire', 'speed'],
+          lastClear: {
+            stage: 1,
+            basePoints: 1000,
+            timePoints: 1400,
+            bonusPoints: 2400,
+            elapsedTicks: 300,
+          },
+        });
+      },
+      showGameOver(): void {
+        const state = run.getState();
+        showGameOver({
+          ...state,
+          status: 'gameover',
+          lives: 0,
+          score: 12345,
+          stage: 4,
+          stats: {
+            bricksDestroyed: 42,
+            rivalsDefeated: 9,
+            powerUpsCollected: 7,
+            elapsedTicks: 5432,
+          },
+        });
+      },
+    };
+  }
+
   return {
     start(): void {
       if (running) {

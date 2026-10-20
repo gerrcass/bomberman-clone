@@ -67,7 +67,12 @@
             <p class="eyebrow">Endless Arena Run</p>
             <h1 class="game-title"><span>Bomb</span><span class="title-accent">Blitz</span></h1>
             <p class="title-blurb">Run the maze. Rule the arena.</p>
-            <button id="play-button" class="button button-primary" type="button">Play</button>
+            <p id="title-best" class="title-best">BEST 000000 · STAGE 0</p>
+            <div class="title-actions">
+              <button id="play-button" class="button button-primary" type="button">Play</button>
+              <button id="how-to-button" class="button" type="button">How to Play</button>
+              <button id="settings-button" class="button" type="button">Settings</button>
+            </div>
             <p class="controls-hint">
               <kbd>Arrows</kbd> / <kbd>WASD</kbd> move<span class="hint-sep">·</span><kbd>Space</kbd>
               bomb<span class="hint-sep">·</span><kbd>Esc</kbd> / <kbd>P</kbd> pause
@@ -89,9 +94,89 @@
                 <button id="resume-button" class="button button-primary" type="button">
                   Resume
                 </button>
-                <button id="quit-button" class="button" type="button">Quit to Title</button>
+                <button id="pause-settings-button" class="button" type="button">Settings</button>
+                <button id="quit-button" class="button" type="button">Quit Run</button>
               </div>
               <p class="controls-hint"><kbd>Esc</kbd> / <kbd>P</kbd> resume</p>
+            </div>
+          </section>
+
+          <section
+            id="howto-screen"
+            class="screen help-screen"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="howto-title"
+            hidden
+          >
+            <div class="help-panel">
+              <p class="eyebrow">Field manual</p>
+              <h2 id="howto-title" class="pause-title">How to Play</h2>
+              <div class="help-grid">
+                <div>
+                  <h3>Objective</h3>
+                  <p>Clear every rival from the arena. Stages get harder, but your build carries over.</p>
+                </div>
+                <div>
+                  <h3>Bombs</h3>
+                  <p>Space drops a bomb. Blasts travel in a cross, stop at walls, destroy the first brick, and chain-detonate other bombs.</p>
+                </div>
+                <div>
+                  <h3>Power-ups</h3>
+                  <p>Bricks hide extra bombs, fire range, speed, and shields. Walk into one to collect it.</p>
+                </div>
+                <div>
+                  <h3>Lives</h3>
+                  <p>Blasts and rival contact cost a life. A shield absorbs one hit. The run ends when lives run out.</p>
+                </div>
+                <div>
+                  <h3>Intermission</h3>
+                  <p>After each stage, choose one of three upgrades with 1–3 or Tab + Enter. Upgrades last for the whole run.</p>
+                </div>
+                <div>
+                  <h3>Controls</h3>
+                  <p>Arrows or WASD move · Space bomb · Esc or P pause · M mute</p>
+                </div>
+              </div>
+              <button id="howto-back-button" class="button button-primary" type="button">Back</button>
+            </div>
+          </section>
+
+          <section
+            id="settings-screen"
+            class="screen settings-screen"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="settings-title"
+            hidden
+          >
+            <div class="settings-panel">
+              <p class="eyebrow">Preferences</p>
+              <h2 id="settings-title" class="pause-title">Settings</h2>
+              <div class="settings-list">
+                <label class="setting-row">
+                  <span>Sound effects</span>
+                  <input id="setting-sound" type="checkbox" />
+                </label>
+                <label class="setting-row">
+                  <span>Music</span>
+                  <input id="setting-music" type="checkbox" />
+                </label>
+                <label class="setting-row">
+                  <span>Screen shake</span>
+                  <input id="setting-shake" type="checkbox" />
+                </label>
+                <label class="setting-row">
+                  <span>Reduced motion</span>
+                  <input id="setting-reduced-motion" type="checkbox" />
+                </label>
+                <label class="setting-row">
+                  <span>High contrast</span>
+                  <input id="setting-high-contrast" type="checkbox" />
+                </label>
+              </div>
+              <button id="settings-back-button" class="button button-primary" type="button">Back</button>
+              <p class="controls-hint">Changes save immediately.</p>
             </div>
           </section>
 
@@ -110,6 +195,7 @@
                 Final score
                 <span id="gameover-score" class="gameover-score">000000</span>
               </p>
+              <p id="gameover-newbest" class="new-best" hidden>New best!</p>
               <p class="gameover-stage">Reached stage <span id="gameover-stage">1</span></p>
               <dl class="run-stats">
                 <div><dt>Bricks</dt><dd id="gameover-bricks">0</dd></div>
