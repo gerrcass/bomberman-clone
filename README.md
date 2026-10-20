@@ -7,8 +7,9 @@ maze combat against AI rivals. It is a static Vite + strict TypeScript + Canvas
 2D game with a deterministic simulation, runtime-generated pixel art, and no
 backend.
 
-This branch is the first playable vertical slice: title screen, generated
-arena, smooth grid movement, HUD, pausing, and CI. Bombs, blasts, power-ups,
+This branch is the bomb-layer vertical slice: title screen, generated arena,
+smooth grid movement, placeable bombs, cross-shaped blasts, brick destruction,
+lives, respawns, a basic game-over screen, HUD, pausing, and CI. Power-ups,
 rivals, upgrades, and the profile/menu screens arrive in later tickets.
 
 ## Setup
@@ -27,13 +28,14 @@ Open the URL Vite prints (usually `http://localhost:5173`).
 | Input | Action |
 | --- | --- |
 | Arrow keys or WASD | Move up, down, left, right |
+| Space | Place a bomb |
 | Escape or P | Pause / resume |
-| Tab, Enter, Space | Move focus and activate menu buttons |
+| Tab, Enter | Move focus and activate menu buttons |
 
 Every screen and action is keyboard-operable. Movement is tile-to-tile with
 smooth interpolation: a held direction keeps moving, a perpendicular tap is
 buffered for the next tile center, and reversing mid-step turns around
-immediately. Walls and bricks block entry.
+immediately. Walls, bricks, and bombs block entry.
 
 ## Objective
 
@@ -42,8 +44,12 @@ collect power-ups hidden under bricks, and draft one of three upgrades between
 stages. The run ends when the player's lives are exhausted; best score and best
 stage persist locally.
 
-This slice currently provides the arena shell: start a run, explore the
-generated 15x13 maze, watch the HUD, and pause or quit back to the title.
+This slice provides the arena shell plus the bomb layer: start a run, place
+bombs on the tile you occupy (or leave behind mid-step), blow up the first brick
+in each direction, chain reactions through touching bombs, and dodge your own
+blasts. A blast costs a life; the player respawns at the safest spawn corner
+after 1.5 seconds with 2.5 seconds of invulnerability. Losing the last life
+opens a game-over screen with the final score and Retry Run / Title buttons.
 
 ## Project structure
 
@@ -82,9 +88,11 @@ touch a browser: they build stages from seeds or ASCII arena fixtures.
 ## Testing
 
 Vitest covers arena generation invariants (dimensions, border, lattice pillars,
-spawn clearance, brick density, seed reproducibility), movement rules, and
-fixed-seed determinism at the stage seam. Movement scenarios use small ASCII
-arena fixtures so each case reads as a maze:
+spawn clearance, brick density, seed reproducibility), movement rules, bomb
+placement and capacity, fuse timing, blast geometry and lifetime, wall and brick
+stopping, chain reactions, lives and respawns, and fixed-seed determinism at
+the stage seam. Scenarios use small ASCII arena fixtures so each case reads as
+a maze:
 
 ```ts
 const stage = createStage({
@@ -97,13 +105,28 @@ tickStage(stage, { direction: 'right' });
 Useful stage API:
 
 ```ts
-const stage = createStage({ seed, stage: 1, arena?, playerSpawn? });
+const stage = createStage({
+  seed,
+  stage: 1,
+  arena?, // ASCII fixture
+  playerSpawn?,
+  bombCapacity?, // default 1
+  blastRange?, // default 1
+  fuseMs?, // default 2200
+  lives?, // default 3
+});
 const events = tickStage(stage, { direction: 'left', bomb: false });
 const state = getStageState(stage);
 ```
 
-Each tick is exactly 1/60 second. See `src/game/stage.test.ts` for the
-determinism and snapshot contracts.
+Each tick is exactly 1/60 second. `state.bombs`, `state.blasts`,
+`state.player.alive`, `state.player.invulnerableTicks`, and
+`state.player.respawnTicks` expose the bomb and life state to the renderer,
+HUD, and tests. Events are additive: `bomb-placed`, `bomb-detonated`,
+`blast-started`, `brick-destroyed`, `player-hit`, `life-lost`, `respawned`, and
+`game-over` join the movement events. See `src/game/stage.test.ts`,
+`src/game/movement.test.ts`, and `src/game/bombs.test.ts` for the determinism,
+snapshot, and rules contracts.
 
 ## Static build
 

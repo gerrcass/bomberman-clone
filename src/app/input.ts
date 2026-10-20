@@ -3,13 +3,13 @@ import type { Direction } from '../game';
 export interface InputActions {
   /** Escape or P. The app decides whether that means pause or resume. */
   onPauseToggle(): void;
-  /** Space. Reserved for bomb placement in the next ticket. */
-  onBomb(): void;
 }
 
 export interface InputController {
   /** Most recently pressed direction that is still held. */
   readonly direction: Direction | null;
+  /** True once per Space press, then cleared. */
+  consumeBomb(): boolean;
   setGameplayEnabled(enabled: boolean): void;
   clear(): void;
   dispose(): void;
@@ -34,6 +34,7 @@ const DIRECTION_KEYS: Readonly<Record<string, Direction>> = {
 export function createInput(win: Window, actions: InputActions): InputController {
   const held: Direction[] = [];
   let gameplayEnabled = false;
+  let bombQueued = false;
 
   function press(direction: Direction): void {
     const existing = held.indexOf(direction);
@@ -52,6 +53,7 @@ export function createInput(win: Window, actions: InputActions): InputController
 
   function clear(): void {
     held.length = 0;
+    bombQueued = false;
   }
 
   function onKeyDown(event: KeyboardEvent): void {
@@ -86,7 +88,7 @@ export function createInput(win: Window, actions: InputActions): InputController
     if (event.code === 'Space') {
       event.preventDefault();
       if (!event.repeat) {
-        actions.onBomb();
+        bombQueued = true;
       }
     }
   }
@@ -116,6 +118,11 @@ export function createInput(win: Window, actions: InputActions): InputController
   return {
     get direction(): Direction | null {
       return held.at(-1) ?? null;
+    },
+    consumeBomb(): boolean {
+      const queued = bombQueued;
+      bombQueued = false;
+      return queued;
     },
     setGameplayEnabled(enabled: boolean): void {
       gameplayEnabled = enabled;

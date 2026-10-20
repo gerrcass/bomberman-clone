@@ -69,6 +69,57 @@ const PLAYER_PALETTE: Palette = {
   '3': '#eaffff',
 };
 
+const BOMB = [
+  '................',
+  '.......4........',
+  '......44........',
+  '.....44.........',
+  '....00000000....',
+  '...0111111110...',
+  '..011222221110..',
+  '..012222222210..',
+  '..012223322210..',
+  '..012223322210..',
+  '..012222222210..',
+  '..011222221110..',
+  '...0111111110...',
+  '....00000000....',
+  '................',
+  '................',
+] as const;
+
+const BOMB_PALETTE: Palette = {
+  '0': '#090c14',
+  '1': '#1d2438',
+  '2': '#4b5878',
+  '3': '#a7bce6',
+  '4': '#ffd166',
+};
+
+const BLAST = [
+  '................',
+  '.......43.......',
+  '......4334......',
+  '.....433334.....',
+  '..4..433334..4..',
+  '.44344333344434.',
+  '..433333333334..',
+  '...4333333334...',
+  '...4333333334...',
+  '..433333333334..',
+  '.44344333344434.',
+  '..4..433334..4..',
+  '.....433334.....',
+  '......4334......',
+  '.......43.......',
+  '................',
+] as const;
+
+const BLAST_PALETTE: Palette = {
+  '3': '#ff7a2f',
+  '4': '#ffe27a',
+};
+
 const FLOOR_PALETTE: Palette = {
   a: '#0e1520',
   b: '#1a2231',
@@ -95,6 +146,8 @@ export interface SpriteSet {
   readonly floor: HTMLCanvasElement;
   readonly wall: HTMLCanvasElement;
   readonly brick: HTMLCanvasElement;
+  readonly bomb: HTMLCanvasElement;
+  readonly blast: HTMLCanvasElement;
   readonly playerIdle: HTMLCanvasElement;
   readonly playerWalkA: HTMLCanvasElement;
   readonly playerWalkB: HTMLCanvasElement;
@@ -107,6 +160,8 @@ export function createSprites(): SpriteSet {
     floor: createPixelSprite(createTerrainMatrix('floor'), FLOOR_PALETTE, SPRITE_SCALE),
     wall: createPixelSprite(createTerrainMatrix('wall'), WALL_PALETTE, SPRITE_SCALE),
     brick: createPixelSprite(createTerrainMatrix('brick'), BRICK_PALETTE, SPRITE_SCALE),
+    bomb: createPixelSprite(BOMB, BOMB_PALETTE, SPRITE_SCALE),
+    blast: createPixelSprite(BLAST, BLAST_PALETTE, SPRITE_SCALE),
     playerIdle: createPixelSprite(PLAYER_IDLE, PLAYER_PALETTE, SPRITE_SCALE),
     playerWalkA: createPixelSprite(PLAYER_WALK_A, PLAYER_PALETTE, SPRITE_SCALE),
     playerWalkB: createPixelSprite(PLAYER_WALK_B, PLAYER_PALETTE, SPRITE_SCALE),

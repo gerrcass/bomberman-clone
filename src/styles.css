@@ -254,8 +254,27 @@ kbd {
   color: #4a5d79;
 }
 
-.pause-screen {
+.pause-screen,
+.gameover-screen {
   background: rgba(3, 6, 11, 0.84);
+}
+
+.gameover-score-line {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.gameover-score {
+  display: block;
+  margin-top: 6px;
+  color: var(--amber);
+  font-size: 38px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
 }
 
 .pause-panel {
@@ -268,6 +287,10 @@ kbd {
   box-shadow:
     0 0 0 1px #05070d,
     0 18px 48px rgba(0, 0, 0, 0.6);
+}
+
+.gameover-screen .pause-panel {
+  border-color: #5b2a35;
 }
 
 .pause-title {
