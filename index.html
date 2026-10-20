@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#05070d" />
+    <meta
+      name="description"
+      content="Bomb Blitz — an endless arena run in the Bomberman tradition."
+    />
+    <title>Bomb Blitz — Endless Arena Run</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230e6c78'/%3E%3Ccircle cx='32' cy='35' r='16' fill='%233fe0e6'/%3E%3Crect x='29' y='10' width='6' height='11' rx='3' fill='%23ffd166'/%3E%3C/svg%3E"
+    />
+    <script type="module" src="/src/main.ts"></script>
+  </head>
+  <body>
+    <main class="app">
+      <section id="game-shell" class="game-shell" aria-label="Bomb Blitz">
+        <header id="hud" class="hud" hidden>
+          <div class="hud-stat">
+            <span class="hud-label">Stage</span>
+            <span id="hud-stage" class="hud-value">1</span>
+          </div>
+          <div class="hud-stat">
+            <span class="hud-label">Lives</span>
+            <span id="hud-lives" class="hud-value">3</span>
+          </div>
+          <div class="hud-stat">
+            <span class="hud-label">Score</span>
+            <span id="hud-score" class="hud-value hud-value-accent">000000</span>
+          </div>
+          <div class="hud-stat">
+            <span class="hud-label">Bombs</span>
+            <span id="hud-bombs" class="hud-value">0/1</span>
+          </div>
+        </header>
+
+        <div class="stage-frame">
+          <canvas
+            id="game-canvas"
+            class="game-canvas"
+            width="720"
+            height="624"
+            tabindex="0"
+            aria-label="Bomb Blitz arena"
+          ></canvas>
+
+          <section id="title-screen" class="screen title-screen">
+            <p class="eyebrow">Endless Arena Run</p>
+            <h1 class="game-title"><span>Bomb</span><span class="title-accent">Blitz</span></h1>
+            <p class="title-blurb">Run the maze. Rule the arena.</p>
+            <button id="play-button" class="button button-primary" type="button">Play</button>
+            <p class="controls-hint">
+              <kbd>Arrows</kbd> / <kbd>WASD</kbd> move<span class="hint-sep">·</span><kbd>Esc</kbd> /
+              <kbd>P</kbd> pause
+            </p>
+          </section>
+
+          <section
+            id="pause-screen"
+            class="screen pause-screen"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pause-title"
+            hidden
+          >
+            <div class="pause-panel">
+              <p class="eyebrow">Run suspended</p>
+              <h2 id="pause-title" class="pause-title">Paused</h2>
+              <div class="pause-actions">
+                <button id="resume-button" class="button button-primary" type="button">
+                  Resume
+                </button>
+                <button id="quit-button" class="button" type="button">Quit to Title</button>
+              </div>
+              <p class="controls-hint"><kbd>Esc</kbd> / <kbd>P</kbd> resume</p>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <noscript>
+      <p class="noscript">Bomb Blitz needs JavaScript enabled to run.</p>
+    </noscript>
+  </body>
+</html>
