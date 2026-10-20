@@ -4,21 +4,41 @@ import {
   type ParsedArena,
   PLAYER_SPAWN,
   parseAsciiArena,
+  SPAWN_CORNERS,
+  tileAt,
 } from './arena';
-import { createMovementState, type MovementState, tickMovement } from './movement';
 import {
+  createMovementState,
+  directionDelta,
+  isMoving,
+  type MovementState,
+  tickMovement,
+} from './movement';
+import {
+  type ArenaState,
+  BASE_BLAST_RANGE,
+  BASE_BOMB_CAPACITY,
+  BASE_FUSE_MS,
   BASE_MOVE_SPEED,
+  BLAST_LIFETIME_TICKS,
+  type BlastState,
+  type BombState,
+  BRICK_POINTS,
+  type Direction,
   type Intent,
+  msToTicks,
+  PLAYER_BOMBER_ID,
   type PlayerState,
+  RESPAWN_DELAY_TICKS,
+  RESPAWN_INVULNERABILITY_TICKS,
+  STARTING_LIVES,
   type StageEvent,
   type StageState,
   type StageStatus,
   type TileCoord,
+  type TileKind,
+  ticksToMs,
 } from './types';
-
-const STARTING_LIVES = 3;
-const STARTING_BOMB_CAPACITY = 1;
-const STARTING_BLAST_RANGE = 1;
 
 export interface StageOptions {
   readonly seed: number;
@@ -27,11 +47,19 @@ export interface StageOptions {
   readonly arena?: readonly string[];
   /** Overrides the spawn when the fixture has no `P` marker. */
   readonly playerSpawn?: TileCoord;
+  /** Player bomb capacity; defaults to 1. */
+  readonly bombCapacity?: number;
+  /** Blast range for newly placed bombs; defaults to 1. */
+  readonly blastRange?: number;
+  /** Fuse duration in milliseconds; defaults to 2200. */
+  readonly fuseMs?: number;
+  /** Starting lives; defaults to 3. The run layer supplies this later. */
+  readonly lives?: number;
 }
 
 /**
  * The stage seam downstream tickets extend: bombs, blasts, pickups, rivals,
- * and AI will join the tick pipeline behind this interface.
+ * and AI join the tick pipeline behind this interface.
  */
 export interface Stage {
   /** Advances exactly one fixed 1/60 s tick and returns this tick's events. */
@@ -50,40 +78,107 @@ export function getStageState(stage: Stage): StageState {
   return stage.getState();
 }
 
+interface MutableBomb {
+  readonly id: number;
+  readonly tile: TileCoord;
+  readonly owner: string;
+  readonly fuseTicks: number;
+  fuseRemainingTicks: number;
+  readonly range: number;
+  readonly placedAtTick: number;
+}
+
+interface MutableBlast {
+  readonly tile: TileCoord;
+  remainingTicks: number;
+  readonly sourceBombId: number;
+}
+
+const BLAST_DIRECTIONS: readonly Direction[] = ['up', 'down', 'left', 'right'];
+
 export function createStage(options: StageOptions): Stage {
-  const arena = resolveArena(options);
-  const spawn = resolveSpawn(options, arena);
-  if (!isWalkable(arena.arena, spawn.x, spawn.y)) {
+  const parsed = resolveArena(options);
+  const spawn = resolveSpawn(options, parsed);
+  if (!isWalkable(parsed.arena, spawn.x, spawn.y)) {
     throw new Error('Player spawn must be a floor tile');
   }
 
   const stageNumber = options.stage ?? 1;
-  const movement = createMovementState(spawn, 'up', BASE_MOVE_SPEED);
+  const bombCapacity = Math.max(1, Math.floor(options.bombCapacity ?? BASE_BOMB_CAPACITY));
+  const blastRange = Math.max(1, Math.floor(options.blastRange ?? BASE_BLAST_RANGE));
+  const fuseTicks = Math.max(1, msToTicks(options.fuseMs ?? BASE_FUSE_MS));
+  const startingLives = Math.max(1, Math.floor(options.lives ?? STARTING_LIVES));
+
+  const tiles: TileKind[] = [...parsed.arena.tiles];
+  const arena: ParsedArena = {
+    arena: {
+      width: parsed.arena.width,
+      height: parsed.arena.height,
+      tiles,
+    },
+    spawn,
+  };
+
+  let movement = createMovementState(spawn, 'up', BASE_MOVE_SPEED);
+  const bombs: MutableBomb[] = [];
+  const blasts = new Map<string, MutableBlast>();
+  let nextBombId = 1;
+
+  const respawnCorners = resolveRespawnCorners(arena.arena, spawn);
 
   let tick = 0;
-  const lives = STARTING_LIVES;
-  const score = 0;
-  const status: StageStatus = 'playing';
+  let lives = startingLives;
+  let score = 0;
+  let status: StageStatus = 'playing';
+  let playerAlive = true;
+  let invulnerableTicks = 0;
+  let respawnTicks = 0;
+  let respawnTile: TileCoord | null = null;
 
   return {
     tick(intent: Intent = {}): readonly StageEvent[] {
-      const events: StageEvent[] = [];
-      const eventTick = tick + 1;
+      if (status !== 'playing') {
+        return [];
+      }
 
-      // Ordered update phases. Later tickets append bomb fuses, blasts,
-      // pickups, rival AI, and win/loss resolution after movement.
-      if (status === 'playing') {
-        tickMovement(movement, intent.direction ?? null, (x, y) => isWalkable(arena.arena, x, y), {
+      const events: StageEvent[] = [];
+      tick += 1;
+
+      // Ordered update phases. Blast tiles and invulnerability age first,
+      // respawns resolve, placement runs before movement so a bomb pressed
+      // mid-step lands on the tile being left while that step keeps moving,
+      // and fuses/detonations/hazard checks resolve after movement.
+      ageBlasts();
+      if (playerAlive) {
+        if (invulnerableTicks > 0) {
+          invulnerableTicks -= 1;
+        }
+      } else {
+        respawnTicks -= 1;
+        if (respawnTicks <= 0) {
+          respawnPlayer(events);
+        }
+      }
+
+      if (playerAlive && intent.bomb === true) {
+        placeBomb(events);
+      }
+      if (playerAlive) {
+        tickMovement(movement, intent.direction ?? null, canEnter, {
           onStep: (tile, direction) => {
-            events.push({ type: 'player-step', tick: eventTick, tile, direction });
+            events.push({ type: 'player-step', tick, tile, direction });
           },
           onReverse: (tile, direction) => {
-            events.push({ type: 'player-reversed', tick: eventTick, tile, direction });
+            events.push({ type: 'player-reversed', tick, tile, direction });
           },
         });
       }
+      resolveBombs(events);
 
-      tick = eventTick;
+      if (playerAlive && invulnerableTicks === 0 && blastAt(movement.to.x, movement.to.y)) {
+        hitPlayer(events);
+      }
+
       return events;
     },
 
@@ -95,18 +190,258 @@ export function createStage(options: StageOptions): Stage {
         arena: {
           width: arena.arena.width,
           height: arena.arena.height,
-          tiles: [...arena.arena.tiles],
+          tiles: [...tiles],
         },
-        player: snapshotPlayer(movement),
+        player: snapshotPlayer(movement, playerAlive, invulnerableTicks, respawnTicks),
         lives,
         score,
         status,
-        activeBombs: 0,
-        bombCapacity: STARTING_BOMB_CAPACITY,
-        blastRange: STARTING_BLAST_RANGE,
+        activeBombs: bombs.filter((bomb) => bomb.owner === PLAYER_BOMBER_ID).length,
+        bombCapacity,
+        blastRange,
+        bombs: bombs.map(snapshotBomb),
+        blasts: [...blasts.values()]
+          .sort((a, b) => a.tile.y - b.tile.y || a.tile.x - b.tile.x)
+          .map(snapshotBlast),
       };
     },
   };
+
+  function ageBlasts(): void {
+    for (const [key, blast] of blasts) {
+      blast.remainingTicks -= 1;
+      if (blast.remainingTicks <= 0) {
+        blasts.delete(key);
+      }
+    }
+  }
+
+  function blastAt(x: number, y: number): boolean {
+    return blasts.has(tileKey(x, y));
+  }
+
+  function hitPlayer(events: StageEvent[]): void {
+    const tile = { ...movement.to };
+    lives -= 1;
+    playerAlive = false;
+    invulnerableTicks = 0;
+    respawnTile = null;
+
+    events.push({ type: 'player-hit', tick, tile: { ...tile }, cause: 'blast' });
+    events.push({ type: 'life-lost', tick, livesRemaining: lives });
+
+    if (lives <= 0) {
+      // Last life: the run ends now. The stage freezes in its final state.
+      status = 'gameover';
+      respawnTicks = 0;
+      events.push({ type: 'game-over', tick, score });
+      return;
+    }
+
+    respawnTicks = RESPAWN_DELAY_TICKS;
+    // Lock in the safest corner now, while the killing blast is still live.
+    // Invulnerability covers anything that changes during the delay.
+    respawnTile = chooseRespawnTile();
+  }
+
+  function respawnPlayer(events: StageEvent[]): void {
+    const tile = respawnTile ?? spawn;
+    movement = createMovementState(tile, 'up', BASE_MOVE_SPEED);
+    playerAlive = true;
+    invulnerableTicks = RESPAWN_INVULNERABILITY_TICKS;
+    respawnTicks = 0;
+    respawnTile = null;
+
+    events.push({
+      type: 'respawned',
+      tick,
+      tile: { ...tile },
+      invulnerableTicks: RESPAWN_INVULNERABILITY_TICKS,
+    });
+  }
+
+  function chooseRespawnTile(): TileCoord {
+    let best = respawnCorners[0] ?? spawn;
+    let bestDistance = -1;
+
+    for (const corner of respawnCorners) {
+      let nearestDanger = Number.POSITIVE_INFINITY;
+
+      for (const blast of blasts.values()) {
+        nearestDanger = Math.min(nearestDanger, manhattan(corner, blast.tile));
+      }
+      for (const bomb of bombs) {
+        nearestDanger = Math.min(nearestDanger, manhattan(corner, bomb.tile));
+      }
+
+      if (nearestDanger > bestDistance) {
+        bestDistance = nearestDanger;
+        best = corner;
+      }
+    }
+
+    return { ...best };
+  }
+
+  function canEnter(x: number, y: number): boolean {
+    return isWalkable(arena.arena, x, y) && bombAt(x, y) === null;
+  }
+
+  function bombAt(x: number, y: number): MutableBomb | null {
+    for (const bomb of bombs) {
+      if (bomb.tile.x === x && bomb.tile.y === y) {
+        return bomb;
+      }
+    }
+    return null;
+  }
+
+  function placeBomb(events: StageEvent[]): void {
+    const playerBombs = bombs.filter((bomb) => bomb.owner === PLAYER_BOMBER_ID).length;
+    if (playerBombs >= bombCapacity) {
+      return;
+    }
+
+    // Mid-step bombs land on the tile being left, never the destination, so
+    // they cannot block the step that is already in progress.
+    const target = isMoving(movement) ? movement.from : movement.to;
+    if (bombAt(target.x, target.y) !== null) {
+      return;
+    }
+
+    const bomb: MutableBomb = {
+      id: nextBombId,
+      tile: { ...target },
+      owner: PLAYER_BOMBER_ID,
+      fuseTicks,
+      fuseRemainingTicks: fuseTicks,
+      range: blastRange,
+      placedAtTick: tick,
+    };
+    nextBombId += 1;
+    bombs.push(bomb);
+
+    events.push({
+      type: 'bomb-placed',
+      tick,
+      bombId: bomb.id,
+      tile: { ...bomb.tile },
+      owner: bomb.owner,
+      fuseTicks: bomb.fuseTicks,
+      range: bomb.range,
+    });
+  }
+
+  /**
+   * Ages every existing fuse, then resolves all detonations for this tick.
+   * Bombs whose fuses expire seed a FIFO queue; bombs reached by a blast join
+   * the same queue, so chain reactions resolve before the tick ends.
+   */
+  function resolveBombs(events: StageEvent[]): void {
+    const due: MutableBomb[] = [];
+    for (const bomb of bombs) {
+      if (bomb.placedAtTick === tick) {
+        continue;
+      }
+      bomb.fuseRemainingTicks -= 1;
+      if (bomb.fuseRemainingTicks <= 0) {
+        due.push(bomb);
+      }
+    }
+    if (due.length === 0) {
+      return;
+    }
+
+    due.sort((a, b) => a.id - b.id);
+    const dueIds = new Set(due.map((bomb) => bomb.id));
+    const queue = [...due];
+    const queuedIds = new Set(dueIds);
+    const detonatedIds = new Set<number>();
+
+    while (queue.length > 0) {
+      const bomb = queue.shift();
+      if (bomb === undefined || detonatedIds.has(bomb.id)) {
+        continue;
+      }
+      detonatedIds.add(bomb.id);
+      removeBomb(bomb.id);
+
+      events.push({
+        type: 'bomb-detonated',
+        tick,
+        bombId: bomb.id,
+        tile: { ...bomb.tile },
+        owner: bomb.owner,
+        range: bomb.range,
+        chain: !dueIds.has(bomb.id),
+      });
+
+      const blastTiles: TileCoord[] = [];
+      addBlastTile(blastTiles, bomb.id, bomb.tile.x, bomb.tile.y);
+
+      for (const direction of BLAST_DIRECTIONS) {
+        const delta = directionDelta(direction);
+        for (let step = 1; step <= bomb.range; step += 1) {
+          const x = bomb.tile.x + delta.x * step;
+          const y = bomb.tile.y + delta.y * step;
+          const kind = tileAt(arena.arena, x, y);
+
+          if (kind === 'wall') {
+            break;
+          }
+
+          addBlastTile(blastTiles, bomb.id, x, y);
+
+          if (kind === 'brick') {
+            destroyBrick(x, y, events);
+            break;
+          }
+
+          const linked = bombAt(x, y);
+          if (linked !== null && !detonatedIds.has(linked.id) && !queuedIds.has(linked.id)) {
+            queue.push(linked);
+            queuedIds.add(linked.id);
+          }
+        }
+      }
+
+      events.push({ type: 'blast-started', tick, bombId: bomb.id, tiles: blastTiles });
+    }
+  }
+
+  function removeBomb(id: number): void {
+    const index = bombs.findIndex((bomb) => bomb.id === id);
+    if (index !== -1) {
+      bombs.splice(index, 1);
+    }
+  }
+
+  function addBlastTile(blastTiles: TileCoord[], sourceBombId: number, x: number, y: number): void {
+    blastTiles.push({ x, y });
+    const key = tileKey(x, y);
+    const existing = blasts.get(key);
+    if (existing === undefined) {
+      blasts.set(key, {
+        tile: { x, y },
+        remainingTicks: BLAST_LIFETIME_TICKS,
+        sourceBombId,
+      });
+    } else {
+      // Overlapping blasts share one tile and refresh to a full lifetime.
+      existing.remainingTicks = Math.max(existing.remainingTicks, BLAST_LIFETIME_TICKS);
+    }
+  }
+
+  function destroyBrick(x: number, y: number, events: StageEvent[]): void {
+    const index = y * arena.arena.width + x;
+    if (tiles[index] !== 'brick') {
+      return;
+    }
+
+    tiles[index] = 'floor';
+    score += BRICK_POINTS;
+    events.push({ type: 'brick-destroyed', tick, tile: { x, y }, points: BRICK_POINTS });
+  }
 }
 
 function resolveArena(options: StageOptions): ParsedArena {
@@ -116,20 +451,58 @@ function resolveArena(options: StageOptions): ParsedArena {
   return { arena: generateArena(options.seed), spawn: null };
 }
 
-function resolveSpawn(options: StageOptions, arena: ParsedArena): TileCoord {
-  const declared = arena.spawn ?? options.playerSpawn;
+function resolveSpawn(options: StageOptions, parsed: ParsedArena): TileCoord {
+  const declared = parsed.spawn ?? options.playerSpawn;
   if (declared !== undefined) {
     return declared;
   }
 
-  if (arena.arena.width === 15 && arena.arena.height === 13) {
+  if (parsed.arena.width === 15 && parsed.arena.height === 13) {
     return { ...PLAYER_SPAWN };
   }
 
-  return { x: 1, y: arena.arena.height - 2 };
+  return { x: 1, y: parsed.arena.height - 2 };
 }
 
-function snapshotPlayer(movement: MovementState): PlayerState {
+/**
+ * Spawn corners in canonical order: the player corner (bottom-left) first,
+ * then the rival corners. Generated arenas use the spec's fixed corners;
+ * fixtures derive corners from their bounds. Non-walkable corners are skipped.
+ */
+function resolveRespawnCorners(arena: ArenaState, fallback: TileCoord): readonly TileCoord[] {
+  const candidates: readonly TileCoord[] =
+    arena.width === 15 && arena.height === 13
+      ? SPAWN_CORNERS
+      : [
+          { x: 1, y: arena.height - 2 },
+          { x: 1, y: 1 },
+          { x: arena.width - 2, y: 1 },
+          { x: arena.width - 2, y: arena.height - 2 },
+        ];
+
+  const unique: TileCoord[] = [];
+  for (const corner of candidates) {
+    if (
+      isWalkable(arena, corner.x, corner.y) &&
+      !unique.some((tile) => tile.x === corner.x && tile.y === corner.y)
+    ) {
+      unique.push({ ...corner });
+    }
+  }
+
+  return unique.length > 0 ? unique : [{ ...fallback }];
+}
+
+function manhattan(a: TileCoord, b: TileCoord): number {
+  return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+}
+
+function snapshotPlayer(
+  movement: MovementState,
+  alive: boolean,
+  invulnerableTicks: number,
+  respawnTicks: number,
+): PlayerState {
   const moving = movement.from.x !== movement.to.x || movement.from.y !== movement.to.y;
   const tile = moving ? movement.from : movement.to;
 
@@ -145,5 +518,33 @@ function snapshotPlayer(movement: MovementState): PlayerState {
     direction: movement.direction,
     moving,
     speed: movement.speed,
+    alive,
+    invulnerableTicks,
+    respawnTicks,
   };
+}
+
+function snapshotBomb(bomb: MutableBomb): BombState {
+  return {
+    id: bomb.id,
+    tile: { ...bomb.tile },
+    owner: bomb.owner,
+    fuseTicks: bomb.fuseTicks,
+    fuseRemainingTicks: bomb.fuseRemainingTicks,
+    fuseRemainingMs: ticksToMs(bomb.fuseRemainingTicks),
+    range: bomb.range,
+  };
+}
+
+function snapshotBlast(blast: MutableBlast): BlastState {
+  return {
+    tile: { ...blast.tile },
+    remainingTicks: blast.remainingTicks,
+    remainingMs: ticksToMs(blast.remainingTicks),
+    sourceBombId: blast.sourceBombId,
+  };
+}
+
+function tileKey(x: number, y: number): string {
+  return `${x},${y}`;
 }

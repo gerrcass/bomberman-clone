@@ -85,7 +85,11 @@ export function tickMovement(
 ): void {
   if (isMoving(state)) {
     if (intent !== null && intent === oppositeDirection(state.direction)) {
-      reverse(state, intent, events);
+      // A bomb behind the bomber blocks the retreat just like it blocks a new
+      // step. The step already in progress continues toward its destination.
+      if (canEnter(state.from.x, state.from.y)) {
+        reverse(state, intent, events);
+      }
     } else if (intent !== null && isPerpendicular(intent, state.direction)) {
       state.pendingDirection = intent;
     }

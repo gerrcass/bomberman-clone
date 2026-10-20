@@ -8,6 +8,29 @@ export const TILE_SIZE = 48;
 /** Base player movement speed in tiles per second. */
 export const BASE_MOVE_SPEED = 4.6;
 
+export const STARTING_LIVES = 3;
+export const BASE_BOMB_CAPACITY = 1;
+export const BASE_BLAST_RANGE = 1;
+export const BASE_FUSE_MS = 2200;
+export const BASE_FUSE_TICKS = 132;
+export const BLAST_LIFETIME_MS = 450;
+export const BLAST_LIFETIME_TICKS = 27;
+export const RESPAWN_DELAY_TICKS = 90;
+export const RESPAWN_INVULNERABILITY_TICKS = 150;
+export const BRICK_POINTS = 10;
+
+export const PLAYER_BOMBER_ID = 'player';
+
+/** Converts a duration in milliseconds to whole simulation ticks. */
+export function msToTicks(ms: number): number {
+  return Math.max(1, Math.round((ms * TICKS_PER_SECOND) / 1000));
+}
+
+/** Converts a whole number of simulation ticks to milliseconds. */
+export function ticksToMs(ticks: number): number {
+  return (ticks * 1000) / TICKS_PER_SECOND;
+}
+
 export type Direction = 'up' | 'down' | 'left' | 'right';
 
 export interface TileCoord {
@@ -44,6 +67,33 @@ export interface PlayerState {
   readonly moving: boolean;
   /** Movement speed in tiles per second. */
   readonly speed: number;
+  /** False while waiting to respawn and after game over. */
+  readonly alive: boolean;
+  /** Remaining respawn invulnerability in ticks; 0 when vulnerable. */
+  readonly invulnerableTicks: number;
+  /** Remaining respawn delay in ticks; 0 when alive. */
+  readonly respawnTicks: number;
+}
+
+/** Read-only view of one live bomb. */
+export interface BombState {
+  readonly id: number;
+  readonly tile: TileCoord;
+  /** Bomber that placed it. The player is `PLAYER_BOMBER_ID`. */
+  readonly owner: string;
+  readonly fuseTicks: number;
+  readonly fuseRemainingTicks: number;
+  readonly fuseRemainingMs: number;
+  readonly range: number;
+}
+
+/** Read-only view of one live blast tile. */
+export interface BlastState {
+  readonly tile: TileCoord;
+  readonly remainingTicks: number;
+  readonly remainingMs: number;
+  /** Bomb whose blast first covered this tile. */
+  readonly sourceBombId: number;
 }
 
 /** Snapshot of everything an observer may read from a stage. */
@@ -56,10 +106,12 @@ export interface StageState {
   readonly lives: number;
   readonly score: number;
   readonly status: StageStatus;
-  /** Placeholder until bombs arrive; the HUD already reads it. */
+  /** Bombs owned by the player, across every owner in `bombs`. */
   readonly activeBombs: number;
   readonly bombCapacity: number;
   readonly blastRange: number;
+  readonly bombs: readonly BombState[];
+  readonly blasts: readonly BlastState[];
 }
 
 /** A bomber's desired action for one tick. */
@@ -84,4 +136,58 @@ export type StageEvent =
       readonly tick: number;
       readonly tile: TileCoord;
       readonly direction: Direction;
+    }
+  | {
+      readonly type: 'bomb-placed';
+      readonly tick: number;
+      readonly bombId: number;
+      readonly tile: TileCoord;
+      readonly owner: string;
+      readonly fuseTicks: number;
+      readonly range: number;
+    }
+  | {
+      readonly type: 'bomb-detonated';
+      readonly tick: number;
+      readonly bombId: number;
+      readonly tile: TileCoord;
+      readonly owner: string;
+      readonly range: number;
+      /** True when another bomb's blast caused this detonation. */
+      readonly chain: boolean;
+    }
+  | {
+      readonly type: 'blast-started';
+      readonly tick: number;
+      readonly bombId: number;
+      readonly tiles: readonly TileCoord[];
+    }
+  | {
+      readonly type: 'brick-destroyed';
+      readonly tick: number;
+      readonly tile: TileCoord;
+      readonly points: number;
+    }
+  | {
+      readonly type: 'player-hit';
+      readonly tick: number;
+      readonly tile: TileCoord;
+      /** Extend this union as new hazards arrive (rival contact). */
+      readonly cause: 'blast';
+    }
+  | {
+      readonly type: 'life-lost';
+      readonly tick: number;
+      readonly livesRemaining: number;
+    }
+  | {
+      readonly type: 'respawned';
+      readonly tick: number;
+      readonly tile: TileCoord;
+      readonly invulnerableTicks: number;
+    }
+  | {
+      readonly type: 'game-over';
+      readonly tick: number;
+      readonly score: number;
     };

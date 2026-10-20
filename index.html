@@ -53,8 +53,8 @@
             <p class="title-blurb">Run the maze. Rule the arena.</p>
             <button id="play-button" class="button button-primary" type="button">Play</button>
             <p class="controls-hint">
-              <kbd>Arrows</kbd> / <kbd>WASD</kbd> move<span class="hint-sep">·</span><kbd>Esc</kbd> /
-              <kbd>P</kbd> pause
+              <kbd>Arrows</kbd> / <kbd>WASD</kbd> move<span class="hint-sep">·</span><kbd>Space</kbd>
+              bomb<span class="hint-sep">·</span><kbd>Esc</kbd> / <kbd>P</kbd> pause
             </p>
           </section>
 
@@ -76,6 +76,31 @@
                 <button id="quit-button" class="button" type="button">Quit to Title</button>
               </div>
               <p class="controls-hint"><kbd>Esc</kbd> / <kbd>P</kbd> resume</p>
+            </div>
+          </section>
+
+          <section
+            id="gameover-screen"
+            class="screen gameover-screen"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="gameover-title"
+            hidden
+          >
+            <div class="pause-panel">
+              <p class="eyebrow">Run over</p>
+              <h2 id="gameover-title" class="pause-title">Game Over</h2>
+              <p class="gameover-score-line">
+                Final score
+                <span id="gameover-score" class="gameover-score">000000</span>
+              </p>
+              <div class="pause-actions">
+                <button id="retry-button" class="button button-primary" type="button">
+                  Retry Run
+                </button>
+                <button id="title-button" class="button" type="button">Title</button>
+              </div>
+              <p class="controls-hint"><kbd>Tab</kbd> choose<span class="hint-sep">·</span><kbd>Enter</kbd> confirm</p>
             </div>
           </section>
         </div>

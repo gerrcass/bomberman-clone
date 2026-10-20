@@ -1,10 +1,10 @@
-import { createStage, tickStage } from '../game';
+import { createStage, type StageEvent, type StageState, tickStage } from '../game';
 import { type ArenaRenderer, createArenaRenderer } from '../render/renderer';
 import { computeCanvasFit } from './fit';
 import { createInput } from './input';
 import { planFixedSteps } from './loop';
 
-type ScreenState = 'title' | 'playing' | 'paused';
+type ScreenState = 'title' | 'playing' | 'paused' | 'gameover';
 
 const TITLE_SEED = 7;
 
@@ -32,9 +32,13 @@ export function createGameApp(doc: Document): GameApp {
   const hudBombs = requireElement<HTMLElement>(doc, '#hud-bombs');
   const titleScreen = requireElement<HTMLElement>(doc, '#title-screen');
   const pauseScreen = requireElement<HTMLElement>(doc, '#pause-screen');
+  const gameoverScreen = requireElement<HTMLElement>(doc, '#gameover-screen');
+  const gameoverScore = requireElement<HTMLElement>(doc, '#gameover-score');
   const playButton = requireElement<HTMLButtonElement>(doc, '#play-button');
   const resumeButton = requireElement<HTMLButtonElement>(doc, '#resume-button');
   const quitButton = requireElement<HTMLButtonElement>(doc, '#quit-button');
+  const retryButton = requireElement<HTMLButtonElement>(doc, '#retry-button');
+  const titleButton = requireElement<HTMLButtonElement>(doc, '#title-button');
 
   const renderer: ArenaRenderer = createArenaRenderer(canvas);
 
@@ -52,9 +56,6 @@ export function createGameApp(doc: Document): GameApp {
         resumeGame();
       }
     },
-    onBomb: () => {
-      // Bomb placement lands with ticket 02; the intent is already wired.
-    },
   });
 
   function updateHud(): void {
@@ -70,6 +71,7 @@ export function createGameApp(doc: Document): GameApp {
     screen = 'playing';
     titleScreen.hidden = true;
     pauseScreen.hidden = true;
+    gameoverScreen.hidden = true;
     hud.hidden = false;
     input.setGameplayEnabled(true);
     accumulator = 0;
@@ -101,10 +103,20 @@ export function createGameApp(doc: Document): GameApp {
     canvas.focus({ preventScroll: true });
   }
 
+  function showGameOver(state: StageState): void {
+    screen = 'gameover';
+    gameoverScreen.hidden = false;
+    setText(gameoverScore, String(state.score).padStart(6, '0'));
+    input.setGameplayEnabled(false);
+    accumulator = 0;
+    retryButton.focus();
+  }
+
   function quitToTitle(): void {
     stage = createStage({ seed: TITLE_SEED });
     screen = 'title';
     pauseScreen.hidden = true;
+    gameoverScreen.hidden = true;
     hud.hidden = true;
     titleScreen.hidden = false;
     input.setGameplayEnabled(false);
@@ -123,22 +135,33 @@ export function createGameApp(doc: Document): GameApp {
     const elapsed = (now - lastFrameTime) / 1000;
     lastFrameTime = now;
 
+    let frameEvents: readonly StageEvent[] = [];
+
     if (screen === 'playing') {
       const plan = planFixedSteps(accumulator, elapsed);
       accumulator = plan.accumulator;
+      let bomb = plan.steps > 0 ? input.consumeBomb() : false;
+      const events: StageEvent[] = [];
 
       for (let step = 0; step < plan.steps; step += 1) {
-        tickStage(stage, { direction: input.direction });
+        events.push(...tickStage(stage, { direction: input.direction, bomb }));
+        bomb = false;
       }
 
       if (plan.steps > 0) {
         updateHud();
       }
+
+      const state = stage.getState();
+      if (state.status === 'gameover') {
+        showGameOver(state);
+      }
+      frameEvents = events;
     } else {
       accumulator = 0;
     }
 
-    renderer.render(stage.getState());
+    renderer.render(stage.getState(), frameEvents);
     win.requestAnimationFrame(frame);
   }
 
@@ -168,6 +191,8 @@ export function createGameApp(doc: Document): GameApp {
   playButton.addEventListener('click', startRun);
   resumeButton.addEventListener('click', resumeGame);
   quitButton.addEventListener('click', quitToTitle);
+  retryButton.addEventListener('click', startRun);
+  titleButton.addEventListener('click', quitToTitle);
   pauseScreen.addEventListener('keydown', onPauseScreenKeyDown);
   doc.addEventListener('visibilitychange', onVisibilityChange);
   win.addEventListener('resize', fitCanvas);
