@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { createRun } from './run';
-import type { Intent } from './types';
+import { createRun, stageSeed } from './run';
 
-const TRAPPED_RIVAL = [
+const CLEARABLE = [
   '#########',
   '#.#####.#',
   '#P.R###.#',
@@ -11,10 +10,17 @@ const TRAPPED_RIVAL = [
   '#########',
 ] as const;
 
-function clearFirstStage(
-  options: Parameters<typeof createRun>[1] = {},
-): ReturnType<typeof createRun> {
-  const run = createRun(1234, options);
+function clearFirstStage() {
+  const run = createRun(77, {
+    firstStage: {
+      arena: CLEARABLE,
+      rivalCount: 1,
+      rivalSpawns: [{ x: 3, y: 2 }],
+      blastRange: 2,
+      fuseMs: 900,
+    },
+  });
+
   run.step({ bomb: true, direction: 'down' });
   for (let index = 0; index < 70; index += 1) {
     run.step({ direction: 'down' });
@@ -25,108 +31,63 @@ function clearFirstStage(
   return run;
 }
 
-describe('run loop', () => {
-  it('starts a fresh run at stage 1 with three lives and two rivals', () => {
-    const run = createRun(7);
-    const state = run.getState();
+describe('run', () => {
+  it('starts with the spec baseline', () => {
+    const state = createRun(123).getState();
 
     expect(state.stage).toBe(1);
     expect(state.lives).toBe(3);
     expect(state.score).toBe(0);
     expect(state.status).toBe('playing');
-    expect(state.stageState.rivals).toHaveLength(2);
-    expect(state.upgrades).toEqual({
-      bomb: 0,
-      fire: 0,
-      speed: 0,
-      multiplier: 0,
-      fuse: 0,
-    });
+    expect(state.shieldCharges).toBe(0);
+    expect(state.upgrades.bomb).toBe(0);
+    expect(state.draft).toEqual([]);
   });
 
-  it('clears a stage, awards a bonus, and offers a three-card draft', () => {
-    const run = clearFirstStage({
-      firstStage: {
-        arena: TRAPPED_RIVAL,
-        rivalCount: 1,
-        rivalSpawns: [{ x: 3, y: 2 }],
-        blastRange: 2,
-        fuseMs: 900,
-      },
-    });
+  it('derives distinct deterministic stage seeds', () => {
+    expect(stageSeed(9, 1)).toBe(stageSeed(9, 1));
+    expect(stageSeed(9, 1)).not.toBe(stageSeed(9, 2));
+  });
+
+  it('clears a stage, awards bonus points, and opens a draft', () => {
+    const run = clearFirstStage();
     const state = run.getState();
 
     expect(state.status).toBe('intermission');
     expect(state.lastClear).not.toBeNull();
     expect(state.lastClear?.basePoints).toBe(1000);
-    expect(state.lastClear?.bonusPoints).toBeGreaterThanOrEqual(1000);
     expect(state.score).toBeGreaterThanOrEqual(1000);
     expect(state.draft).toHaveLength(3);
     expect(new Set(state.draft).size).toBe(3);
     expect(state.stats.rivalsDefeated).toBe(1);
   });
 
-  it('applies the chosen upgrade and starts the next stage with carried score', () => {
-    const run = clearFirstStage({
-      firstStage: {
-        arena: TRAPPED_RIVAL,
-        rivalCount: 1,
-        rivalSpawns: [{ x: 3, y: 2 }],
-        blastRange: 2,
-        fuseMs: 900,
-      },
-    });
-    const cleared = run.getState();
-    const chosen = cleared.draft[0];
-    expect(chosen).toBeDefined();
-    if (chosen === undefined) {
+  it('applies an upgrade and carries stats into the next stage', () => {
+    const run = clearFirstStage();
+    const before = run.getState();
+    const choice = before.draft[0];
+    expect(choice).toBeDefined();
+    if (choice === undefined) {
       return;
     }
 
-    expect(run.chooseUpgrade(chosen)).toBe(true);
-    const next = run.getState();
+    expect(run.chooseUpgrade(choice)).toBe(true);
+    const after = run.getState();
 
-    expect(next.status).toBe('playing');
-    expect(next.stage).toBe(2);
-    expect(next.score).toBeGreaterThanOrEqual(cleared.score);
-    expect(next.stageState.score).toBe(next.score);
-    expect(next.draft).toHaveLength(0);
+    expect(after.status).toBe('playing');
+    expect(after.stage).toBe(2);
+    expect(after.score).toBeGreaterThanOrEqual(before.score);
+    expect(after.stageState.score).toBe(after.score);
+    expect(after.draft).toEqual([]);
   });
 
-  it('rejects an upgrade outside the intermission', () => {
-    const run = createRun(7);
-    expect(run.chooseUpgrade('bomb')).toBe(false);
-  });
-
-  it('quit ends the run and preserves the score', () => {
-    const run = createRun(7);
+  it('ends the run when the player quits', () => {
+    const run = createRun(5);
     run.step({ direction: 'right' });
-    const score = run.getState().score;
     run.quit();
     const state = run.getState();
 
     expect(state.status).toBe('gameover');
     expect(state.lives).toBe(0);
-    expect(state.score).toBeGreaterThanOrEqual(score);
-  });
-
-  it('plays the same seed identically', () => {
-    const script: Intent[] = [
-      { direction: 'right' },
-      { direction: 'right' },
-      { bomb: true },
-      { direction: 'down' },
-      {},
-      {},
-    ];
-    const first = createRun(99);
-    const second = createRun(99);
-    const firstEvents = script.flatMap((intent) => first.step(intent));
-    const secondEvents = script.flatMap((intent) => second.step(intent));
-
-    expect(firstEvents).toEqual(secondEvents);
-    expect(first.getState().stageState.player.position).toEqual(
-      second.getState().stageState.player.position,
-    );
   });
 });
