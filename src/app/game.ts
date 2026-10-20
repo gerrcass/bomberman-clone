@@ -12,8 +12,23 @@ import { type ArenaRenderer, createArenaRenderer } from '../render/renderer';
 import { computeCanvasFit } from './fit';
 import { createInput } from './input';
 import { planFixedSteps } from './loop';
+import {
+  loadProfile,
+  recordRun,
+  type Settings,
+  type StorageLike,
+  saveProfile,
+  updateSettings,
+} from './profile';
 
-type ScreenState = 'title' | 'playing' | 'paused' | 'intermission' | 'gameover';
+type ScreenState =
+  | 'title'
+  | 'playing'
+  | 'paused'
+  | 'intermission'
+  | 'gameover'
+  | 'howto'
+  | 'settings';
 
 const TITLE_SEED = 7;
 const STAGE_INTRO_TICKS = 90;
@@ -59,6 +74,20 @@ export function createGameApp(doc: Document): GameApp {
   const gameoverRivals = requireElement<HTMLElement>(doc, '#gameover-rivals');
   const gameoverPickups = requireElement<HTMLElement>(doc, '#gameover-pickups');
   const gameoverTime = requireElement<HTMLElement>(doc, '#gameover-time');
+  const titleBest = requireElement<HTMLElement>(doc, '#title-best');
+  const howToScreen = requireElement<HTMLElement>(doc, '#howto-screen');
+  const howToButton = requireElement<HTMLButtonElement>(doc, '#how-to-button');
+  const howToBackButton = requireElement<HTMLButtonElement>(doc, '#howto-back-button');
+  const settingsScreen = requireElement<HTMLElement>(doc, '#settings-screen');
+  const settingsButton = requireElement<HTMLButtonElement>(doc, '#settings-button');
+  const pauseSettingsButton = requireElement<HTMLButtonElement>(doc, '#pause-settings-button');
+  const settingsBackButton = requireElement<HTMLButtonElement>(doc, '#settings-back-button');
+  const settingSound = requireElement<HTMLInputElement>(doc, '#setting-sound');
+  const settingMusic = requireElement<HTMLInputElement>(doc, '#setting-music');
+  const settingShake = requireElement<HTMLInputElement>(doc, '#setting-shake');
+  const settingReducedMotion = requireElement<HTMLInputElement>(doc, '#setting-reduced-motion');
+  const settingHighContrast = requireElement<HTMLInputElement>(doc, '#setting-high-contrast');
+  const gameoverNewBest = requireElement<HTMLElement>(doc, '#gameover-newbest');
   const playButton = requireElement<HTMLButtonElement>(doc, '#play-button');
   const resumeButton = requireElement<HTMLButtonElement>(doc, '#resume-button');
   const quitButton = requireElement<HTMLButtonElement>(doc, '#quit-button');
@@ -67,6 +96,8 @@ export function createGameApp(doc: Document): GameApp {
 
   const renderer: ArenaRenderer = createArenaRenderer(canvas);
 
+  const storage = safeStorage(win);
+  let profile = loadProfile(storage);
   let screen: ScreenState = 'title';
   let run: Run = createRun(TITLE_SEED);
   let titleStage: StageState = createStage({ seed: TITLE_SEED, rivalCount: 0 }).getState();
@@ -74,6 +105,14 @@ export function createGameApp(doc: Document): GameApp {
   let lastFrameTime = 0;
   let running = false;
   let introTicks = 0;
+  let runRecorded = false;
+  let settingsReturn: 'title' | 'paused' = 'title';
+  const quitArmed = false;
+  const quitTimer: number | null = null;
+
+  applySettings();
+  syncSettingsInputs();
+  renderTitleBest();
 
   const input = createInput(win, {
     onPauseToggle: () => {
@@ -86,7 +125,99 @@ export function createGameApp(doc: Document): GameApp {
   });
 
   function displayStage(): StageState {
-    return screen === 'title' ? titleStage : run.getState().stageState;
+    return screen === 'title' || screen === 'howto' || screen === 'settings'
+      ? titleStage
+      : run.getState().stageState;
+  }
+
+  function applySettings(): void {
+    doc.documentElement.dataset['reducedMotion'] = String(profile.settings.reducedMotion);
+    doc.documentElement.dataset['highContrast'] = String(profile.settings.highContrast);
+  }
+
+  function syncSettingsInputs(): void {
+    settingSound.checked = profile.settings.sound;
+    settingMusic.checked = profile.settings.music;
+    settingShake.checked = profile.settings.screenShake;
+    settingReducedMotion.checked = profile.settings.reducedMotion;
+    settingHighContrast.checked = profile.settings.highContrast;
+  }
+
+  function renderTitleBest(): void {
+    setText(
+      titleBest,
+      `BEST ${String(profile.highScore).padStart(6, '0')} · STAGE ${profile.bestStage}`,
+    );
+  }
+
+  function saveSettings(patch: Partial<Settings>): void {
+    profile = updateSettings(profile, patch);
+    saveProfile(storage, profile);
+    applySettings();
+  }
+
+  function recordFinishedRun(state: RunState): boolean {
+    if (runRecorded) {
+      return false;
+    }
+    runRecorded = true;
+    const previousBest = profile.highScore;
+    profile = recordRun(profile, { score: state.score, stage: state.stage });
+    saveProfile(storage, profile);
+    renderTitleBest();
+    return state.score > previousBest;
+  }
+
+  function openHowTo(): void {
+    if (screen !== 'title') {
+      return;
+    }
+    screen = 'howto';
+    titleScreen.hidden = true;
+    howToScreen.hidden = false;
+    howToBackButton.focus();
+  }
+
+  function closeHowTo(): void {
+    if (screen !== 'howto') {
+      return;
+    }
+    screen = 'title';
+    howToScreen.hidden = true;
+    titleScreen.hidden = false;
+    howToButton.focus();
+  }
+
+  function openSettings(returnTo: 'title' | 'paused'): void {
+    if (returnTo === 'paused' && screen !== 'paused') {
+      return;
+    }
+    settingsReturn = returnTo;
+    if (returnTo === 'title') {
+      titleScreen.hidden = true;
+    } else {
+      pauseScreen.hidden = true;
+    }
+    screen = 'settings';
+    syncSettingsInputs();
+    settingsScreen.hidden = false;
+    settingsBackButton.focus();
+  }
+
+  function closeSettings(): void {
+    if (screen !== 'settings') {
+      return;
+    }
+    settingsScreen.hidden = true;
+    if (settingsReturn === 'paused') {
+      screen = 'paused';
+      pauseScreen.hidden = false;
+      pauseSettingsButton.focus();
+    } else {
+      screen = 'title';
+      titleScreen.hidden = false;
+      settingsButton.focus();
+    }
   }
 
   function updateHud(): void {
@@ -406,6 +537,7 @@ export function createGameApp(doc: Document): GameApp {
       __bombBlitzDebug?: {
         showIntermission(): void;
         showGameOver(): void;
+        state(): unknown;
       };
     };
     debugWindow.__bombBlitzDebug = {
@@ -425,6 +557,21 @@ export function createGameApp(doc: Document): GameApp {
             elapsedTicks: 300,
           },
         });
+      },
+      state(): unknown {
+        const state = run.getState();
+        return {
+          status: state.status,
+          stage: state.stage,
+          lives: state.lives,
+          score: state.score,
+          player: state.stageState.player,
+          rivals: state.stageState.rivals.map((rival) => ({
+            id: rival.id,
+            alive: rival.alive,
+            tile: rival.tile,
+          })),
+        };
       },
       showGameOver(): void {
         const state = run.getState();

@@ -67,10 +67,7 @@ export function loadProfile(storage: StorageLike | null): Profile {
         sound: booleanOr(settingsRecord['sound'], DEFAULT_SETTINGS.sound),
         music: booleanOr(settingsRecord['music'], DEFAULT_SETTINGS.music),
         screenShake: booleanOr(settingsRecord['screenShake'], DEFAULT_SETTINGS.screenShake),
-        reducedMotion: booleanOr(
-          settingsRecord['reducedMotion'],
-          DEFAULT_SETTINGS.reducedMotion,
-        ),
+        reducedMotion: booleanOr(settingsRecord['reducedMotion'], DEFAULT_SETTINGS.reducedMotion),
         highContrast: booleanOr(settingsRecord['highContrast'], DEFAULT_SETTINGS.highContrast),
       },
     };
@@ -118,9 +115,7 @@ export function updateSettings(profile: Profile, patch: Partial<Settings>): Prof
 }
 
 function nonNegativeInteger(value: unknown): number {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0
-    ? Math.floor(value)
-    : 0;
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
 }
 
 function booleanOr(value: unknown, fallback: boolean): boolean {

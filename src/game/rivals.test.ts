@@ -1,4 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import {
+  rivalBlastRangeForStage,
+  rivalBombCapacityForStage,
+  rivalReactionTicks,
+  rivalSpeedForStage,
+} from './ai';
 import { createStage, getStageState, tickStage } from './stage';
 import type { Direction, StageEvent } from './types';
 
@@ -66,6 +72,7 @@ describe('rivals', () => {
       rivalSpawns: [{ x: 3, y: 2 }],
       blastRange: 2,
       fuseMs: 1000,
+      scoreMultiplier: 1.5,
     });
 
     const events: StageEvent[] = [];
@@ -76,7 +83,11 @@ describe('rivals', () => {
     const state = getStageState(stage);
     expect(state.rivals[0]?.alive).toBe(false);
     expect(state.status).toBe('cleared');
-    expect(events.some((event) => event.type === 'rival-defeated')).toBe(true);
+    const defeated = events.find((event) => event.type === 'rival-defeated');
+    expect(defeated).toBeDefined();
+    if (defeated?.type === 'rival-defeated') {
+      expect(defeated.points).toBe(750);
+    }
     expect(events.some((event) => event.type === 'stage-cleared')).toBe(true);
   });
 
@@ -95,5 +106,28 @@ describe('rivals', () => {
     expect(events.some((event) => event.type === 'player-hit' && event.cause === 'contact')).toBe(
       true,
     );
+  });
+});
+
+describe('stage scaling', () => {
+  it('spawns two rivals through stage 3 and three from stage 4', () => {
+    expect(getStageState(createStage({ seed: 1, stage: 1 })).rivals).toHaveLength(2);
+    expect(getStageState(createStage({ seed: 1, stage: 3 })).rivals).toHaveLength(2);
+    expect(getStageState(createStage({ seed: 1, stage: 4 })).rivals).toHaveLength(3);
+    expect(getStageState(createStage({ seed: 1, stage: 99 })).rivals).toHaveLength(3);
+  });
+
+  it('scales rival speed, reaction, capacity, and range with no final stage', () => {
+    expect(rivalSpeedForStage(1)).toBe(3.5);
+    expect(rivalSpeedForStage(10)).toBeGreaterThan(rivalSpeedForStage(9));
+    expect(rivalSpeedForStage(1000)).toBe(5.2);
+    expect(rivalReactionTicks(20, 'balanced')).toBeLessThan(rivalReactionTicks(1, 'balanced'));
+    expect(rivalReactionTicks(1000, 'balanced')).toBe(6);
+    expect(rivalBombCapacityForStage(1)).toBe(1);
+    expect(rivalBombCapacityForStage(4)).toBe(2);
+    expect(rivalBombCapacityForStage(1000)).toBe(8);
+    expect(rivalBlastRangeForStage(1)).toBe(1);
+    expect(rivalBlastRangeForStage(5)).toBe(2);
+    expect(rivalBlastRangeForStage(1000)).toBe(8);
   });
 });

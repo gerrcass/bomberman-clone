@@ -81,6 +81,35 @@ describe('run', () => {
     expect(after.draft).toEqual([]);
   });
 
+  it('awards the base and time bonus using the stage clock', () => {
+    const run = createRun(88, {
+      firstStage: {
+        arena: CLEARABLE,
+        rivalCount: 1,
+        rivalSpawns: [{ x: 3, y: 2 }],
+        blastRange: 2,
+        fuseMs: 2200,
+      },
+    });
+
+    run.step({ bomb: true, direction: 'down' });
+    for (let index = 0; index < 80; index += 1) {
+      run.step({ direction: 'down' });
+    }
+    for (let index = 0; index < 120; index += 1) {
+      run.step({});
+    }
+
+    const state = run.getState();
+    const clear = state.lastClear;
+    expect(clear).not.toBeNull();
+    if (clear === null) return;
+    expect(clear.basePoints).toBe(1000);
+    expect(clear.timePoints).toBe(Math.max(0, 1500 - 20 * Math.floor(clear.elapsedTicks / 60)));
+    expect(clear.bonusPoints).toBe(clear.basePoints + clear.timePoints);
+    expect(state.score).toBeGreaterThanOrEqual(clear.bonusPoints);
+  });
+
   it('ends the run when the player quits', () => {
     const run = createRun(5);
     run.step({ direction: 'right' });
