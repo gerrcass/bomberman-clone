@@ -316,7 +316,7 @@ export function createGameApp(doc: Document): GameApp {
       intermissionSummary,
       clear === null
         ? `Score ${state.score} · Lives ${state.lives}`
-        : `Stage ${clear.stage} cleared · +${clear.bonusPoints} points · Score ${state.score} · Lives ${state.lives}`,
+        : `Stage ${clear.stage} cleared · Base ${clear.basePoints} + Time ${clear.timePoints} = +${clear.bonusPoints} · Score ${state.score} · Lives ${state.lives}`,
     );
     renderUpgradeCards(state);
   }
@@ -644,6 +644,12 @@ export function createGameApp(doc: Document): GameApp {
   howToScreen.addEventListener('keydown', (event) => trapDialogFocus(event, howToScreen));
   settingsScreen.addEventListener('keydown', (event) => trapDialogFocus(event, settingsScreen));
   doc.addEventListener('keydown', onGlobalKeyDown);
+  doc.addEventListener('click', (event) => {
+    const target = event.target;
+    if (target instanceof Element && target.closest('button') !== null) {
+      audio.click();
+    }
+  });
   win.addEventListener('pointerdown', () => audio.unlock(), { once: true });
   win.addEventListener('keydown', () => audio.unlock(), { once: true });
   doc.addEventListener('visibilitychange', onVisibilityChange);

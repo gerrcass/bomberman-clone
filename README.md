@@ -9,6 +9,10 @@ Clear stage after stage by trapping rivals in cross-shaped blasts, break bricks
 to find power-ups, and draft an upgrade between stages. The run ends when your
 lives do; your best score and best stage stay in the browser.
 
+**Play the live game:** https://gerrcass.github.io/bomberman-clone/
+
+![Bomb Blitz arena with the player, rivals, bricks, and HUD](docs/screenshots/arena.png)
+
 ## Setup
 
 Requires Node.js 22.12 or newer.
@@ -156,10 +160,13 @@ The app fetches nothing at runtime: sprites are generated from pixel matrices,
 audio is synthesized with Web Audio, and only a bundled display font is
 packaged.
 
+The live site is deployed at
+**https://gerrcass.github.io/bomberman-clone/**.
+
 `.github/workflows/pages.yml` builds the site and publishes `dist/` to GitHub
 Pages on every push to `main`, and can be run manually from the Actions tab.
-Enable **Settings → Pages → Source: GitHub Actions** once for the repository.
-Any static host can serve the same `dist/` directory instead.
+For a fork, enable **Settings → Pages → Source: GitHub Actions** once for the
+repository. Any static host can serve the same `dist/` directory instead.
 
 ## CI
 

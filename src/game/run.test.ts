@@ -120,3 +120,16 @@ describe('run', () => {
     expect(state.lives).toBe(0);
   });
 });
+
+describe('quit accounting', () => {
+  it('does not double-count a cleared stage when quitting at intermission', () => {
+    const run = clearFirstStage();
+    const before = run.getState();
+    run.quit();
+    const after = run.getState();
+
+    expect(after.status).toBe('gameover');
+    expect(after.stats).toEqual(before.stats);
+    expect(after.score).toBeGreaterThanOrEqual(before.score);
+  });
+});

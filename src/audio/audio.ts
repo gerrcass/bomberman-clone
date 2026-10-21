@@ -10,6 +10,7 @@ export interface AudioSettings {
 export interface AudioController {
   unlock(): void;
   playEvents(events: readonly StageEvent[]): void;
+  click(): void;
   setSettings(settings: AudioSettings): void;
   dispose(): void;
 }
@@ -212,6 +213,12 @@ export function createAudio(win: Window): AudioController {
 
   return {
     unlock,
+    click(): void {
+      if (!settings.sound) {
+        return;
+      }
+      tone(880, 0.035, 'square', 0.025, 660);
+    },
     playEvents,
     setSettings(next: AudioSettings): void {
       settings = next;
