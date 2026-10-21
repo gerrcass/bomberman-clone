@@ -67,6 +67,7 @@ npm run check      # lint + typecheck + test + build
 ## Gotchas
 
 - The arena is 15 wide by 13 tall; x runs 0–14 and y runs 0–12.
+- A technique is player-only and run-scoped; rival bombs keep classic geometry.
 - A bomb placed mid-step goes on the tile being left, never the destination.
 - A rival occupies `movement.to` for hazards. A decision based only on `movement.from` walks rivals into fresh blasts.
 - A blast destroys the first brick, stops, and does not destroy revealed power-ups.
