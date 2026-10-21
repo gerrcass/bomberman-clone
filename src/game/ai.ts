@@ -336,12 +336,10 @@ function adjacentBrick(arena: ArenaState, tile: TileCoord): boolean {
 }
 
 function chooseRandomStep(
-  arena: ArenaState,
-  bombs: readonly BombState[],
   tile: TileCoord,
+  canStep: (x: number, y: number) => boolean,
   rng: Rng,
 ): Direction | null {
-  const canStep = makeCanStep(arena, bombs);
   for (const direction of shuffle(rng, DIRECTIONS)) {
     const delta = DELTAS[direction];
     if (canStep(tile.x + delta.x, tile.y + delta.y)) {
@@ -356,18 +354,53 @@ function choosePickupStep(
   world: RivalWorld,
   canStep: (x: number, y: number) => boolean,
 ): Direction | null {
+  const position = self.moving ? self.to : self.tile;
   const reach = PERSONALITY_TUNING[self.personality].pickupReach;
   const candidates = world.powerUps
-    .filter((powerUp) => manhattan(self.tile, powerUp.tile) <= reach)
+    .filter((powerUp) => manhattan(position, powerUp.tile) <= reach)
     .sort(
       (a, b) =>
-        manhattan(self.tile, a.tile) - manhattan(self.tile, b.tile) ||
+        manhattan(position, a.tile) - manhattan(position, b.tile) ||
         a.tile.y - b.tile.y ||
         a.tile.x - b.tile.x,
     );
 
   for (const powerUp of candidates) {
-    const step = findStepToward(self.tile, powerUp.tile, canStep, world.rng);
+    const step = findStepToward(position, powerUp.tile, canStep, world.rng);
+    if (step !== null) {
+      return step;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Walks toward the nearest reachable floor tile that touches a brick. Bosses
+ * use this when the player is walled off, so they dig toward a route instead
+ * of orbiting their spawn pocket forever.
+ */
+function chooseDigStep(
+  position: TileCoord,
+  world: RivalWorld,
+  canStep: (x: number, y: number) => boolean,
+): Direction | null {
+  const targets: TileCoord[] = [];
+  for (let y = 1; y < world.arena.height - 1; y += 1) {
+    for (let x = 1; x < world.arena.width - 1; x += 1) {
+      if (tileAt(world.arena, x, y) !== 'floor') {
+        continue;
+      }
+      if (adjacentBrick(world.arena, { x, y })) {
+        targets.push({ x, y });
+      }
+    }
+  }
+
+  targets.sort((a, b) => manhattan(position, a) - manhattan(position, b) || a.y - b.y || a.x - b.x);
+
+  for (const target of targets) {
+    const step = findStepToward(position, target, canStep, world.rng);
     if (step !== null) {
       return step;
     }
@@ -385,21 +418,26 @@ export function decideRivalAction(self: RivalView, world: RivalWorld): RivalDeci
   const canStep = makeCanStep(world.arena, world.bombs);
   const danger = buildDangerMap(world.arena, world.bombs, world.blasts);
   const tuning = PERSONALITY_TUNING[self.personality];
+  // While a step is in progress the simulation counts the rival as occupying
+  // `to`, so plan and flee from there rather than from the tile it is leaving.
+  const position = self.moving ? self.to : self.tile;
+  const safeCanStep = (x: number, y: number): boolean =>
+    canStep(x, y) && !danger.has(tileKey({ x, y }));
 
-  if (danger.has(tileKey(self.tile))) {
+  if (danger.has(tileKey(self.tile)) || danger.has(tileKey(self.to))) {
     return {
-      direction: findNearestSafeStep(self.tile, danger, canStep, world.rng),
+      direction: findNearestSafeStep(position, danger, canStep, world.rng),
       bomb: false,
     };
   }
 
   const playerDistance =
-    world.playerAlive && world.player !== null ? manhattan(self.tile, world.player) : Infinity;
+    world.playerAlive && world.player !== null ? manhattan(position, world.player) : Infinity;
 
   // Rivals can kill by touch; close the distance aggressively.
   const contactReach = self.personality === 'aggressive' ? 2 : 1;
   if (world.playerAlive && world.player !== null && playerDistance <= contactReach) {
-    const step = findStepToward(self.tile, world.player, canStep, world.rng);
+    const step = findStepToward(position, world.player, safeCanStep, world.rng);
     if (step !== null) {
       return { direction: step, bomb: false };
     }
@@ -407,44 +445,53 @@ export function decideRivalAction(self: RivalView, world: RivalWorld): RivalDeci
 
   // A cautious rival values a visible power-up above a long chase.
   if (self.personality === 'cautious' || playerDistance > 3) {
-    const pickupStep = choosePickupStep(self, world, canStep);
+    const pickupStep = choosePickupStep(self, world, safeCanStep);
     if (pickupStep !== null) {
       return { direction: pickupStep, bomb: false };
     }
   }
 
-  const canPlaceBomb = !self.moving;
+  // A rival can bomb the tile it is leaving, matching the player's mid-step
+  // placement rule. The escape route is checked from that bomb tile.
+  const bombTile = self.moving ? self.from : self.to;
+  const bombTileFree = !world.bombs.some(
+    (bomb) => bomb.tile.x === bombTile.x && bomb.tile.y === bombTile.y,
+  );
   const escapeAfterBomb = (): boolean => {
-    if (!canPlaceBomb) {
+    if (!bombTileFree) {
       return false;
     }
-    const hypothetical: BombLike = { id: -1, tile: self.tile, range: self.blastRange };
+    const hypothetical: BombLike = { id: -1, tile: bombTile, range: self.blastRange };
     const bombsWithHypothetical: BombLike[] = [...world.bombs, hypothetical];
     const dangerWithBomb = buildDangerMap(world.arena, bombsWithHypothetical, world.blasts);
-    return hasEscapeRoute(self.tile, dangerWithBomb, canStep, world.rng);
+    return hasEscapeRoute(bombTile, dangerWithBomb, canStep, world.rng);
   };
 
+  const blastsClear = world.blasts.length === 0;
   if (
     world.playerAlive &&
     world.player !== null &&
-    canPlaceBomb &&
-    bombReachesPlayer(world.arena, self.tile, self.blastRange, world.player) &&
+    blastsClear &&
+    bombTileFree &&
+    bombReachesPlayer(world.arena, bombTile, self.blastRange, world.player) &&
     escapeAfterBomb()
   ) {
     return { direction: null, bomb: true };
   }
 
   if (self.personality !== 'aggressive' || world.rng.next() < tuning.aggression) {
-    const pickupStep = choosePickupStep(self, world, canStep);
+    const pickupStep = choosePickupStep(self, world, safeCanStep);
     if (pickupStep !== null) {
       return { direction: pickupStep, bomb: false };
     }
   }
 
+  const brickChance = playerDistance > 5 ? 1 : tuning.brickChance;
   if (
-    canPlaceBomb &&
-    adjacentBrick(world.arena, self.tile) &&
-    world.rng.next() < tuning.brickChance &&
+    blastsClear &&
+    bombTileFree &&
+    adjacentBrick(world.arena, bombTile) &&
+    world.rng.next() < brickChance &&
     escapeAfterBomb()
   ) {
     return { direction: null, bomb: true };
@@ -455,14 +502,19 @@ export function decideRivalAction(self: RivalView, world: RivalWorld): RivalDeci
     world.player !== null &&
     (self.personality === 'aggressive' || world.rng.next() < tuning.aggression)
   ) {
-    const step = findStepToward(self.tile, world.player, canStep, world.rng);
+    const step = findStepToward(position, world.player, safeCanStep, world.rng);
     if (step !== null) {
       return { direction: step, bomb: false };
     }
   }
 
+  const digStep = chooseDigStep(position, world, safeCanStep);
+  if (digStep !== null) {
+    return { direction: digStep, bomb: false };
+  }
+
   return {
-    direction: chooseRandomStep(world.arena, world.bombs, self.tile, world.rng),
+    direction: chooseRandomStep(position, safeCanStep, world.rng),
     bomb: false,
   };
 }

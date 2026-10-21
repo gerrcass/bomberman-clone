@@ -526,8 +526,8 @@ describe('lives and respawn', () => {
       return events;
     };
 
-    const first = createStage({ seed: 2024, stage: 2, bombCapacity: 2 });
-    const second = createStage({ seed: 2024, stage: 2, bombCapacity: 2 });
+    const first = createStage({ seed: 2024, stage: 2, bombCapacity: 2, rivalCount: 0 });
+    const second = createStage({ seed: 2024, stage: 2, bombCapacity: 2, rivalCount: 0 });
 
     const firstEvents = runScript(first);
     const secondEvents = runScript(second);

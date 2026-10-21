@@ -1,4 +1,5 @@
 import {
+  buildDangerMap,
   decideRivalAction,
   RIVAL_CONTACT_RANGE,
   RIVAL_ROSTER,
@@ -25,6 +26,7 @@ import {
   directionDelta,
   isMoving,
   type MovementState,
+  oppositeDirection,
   tickMovement,
 } from './movement';
 import {
@@ -482,7 +484,22 @@ export function createStage(options: StageOptions): Stage {
     return created;
   }
 
+  function touchesBrick(tile: TileCoord): boolean {
+    return (
+      tileAt(arena.arena, tile.x + 1, tile.y) === 'brick' ||
+      tileAt(arena.arena, tile.x - 1, tile.y) === 'brick' ||
+      tileAt(arena.arena, tile.x, tile.y + 1) === 'brick' ||
+      tileAt(arena.arena, tile.x, tile.y - 1) === 'brick'
+    );
+  }
+
   function tickRivals(events: StageEvent[]): void {
+    const danger = buildDangerMap(
+      arena.arena,
+      bombs.map(snapshotBomb),
+      [...blasts.values()].map(snapshotBlast),
+    );
+
     for (const rival of rivals) {
       if (!rival.alive) {
         continue;
@@ -498,12 +515,64 @@ export function createStage(options: StageOptions): Stage {
         rival.bombIntent = decision.bomb;
       }
 
-      if (rival.bombIntent && !isMoving(rival.movement)) {
-        placeRivalBomb(rival, events);
+      // Decisions are throttled by reaction time, so a newly placed bomb can
+      // appear between them. Refuse the next step into danger unless the rival
+      // is already inside a blast cross and must escape through it.
+      const leavingDanger = danger.has(tileKey(rival.movement.from.x, rival.movement.from.y));
+      const enteringDanger = danger.has(tileKey(rival.movement.to.x, rival.movement.to.y));
+
+      // A live blast can appear under a rival's destination while it is already
+      // walking there. Reverse immediately instead of finishing the step.
+      if (isMoving(rival.movement) && !leavingDanger && enteringDanger) {
+        rival.desiredDirection = oppositeDirection(rival.movement.direction);
         rival.bombIntent = false;
+        rival.nextDecisionTick = Math.min(rival.nextDecisionTick, tick + 1);
+      }
+
+      const inDanger = leavingDanger || enteringDanger;
+      if (rival.desiredDirection !== null) {
+        const delta = directionDelta(rival.desiredDirection);
+        const next = {
+          x: rival.movement.to.x + delta.x,
+          y: rival.movement.to.y + delta.y,
+        };
+        if (danger.has(tileKey(next.x, next.y))) {
+          if (inDanger) {
+            // Already inside the danger map: ask the AI for the escape route
+            // again. It may need to cross another danger tile to reach safety.
+            const decision = decideRivalAction(rivalView(rival), rivalWorld());
+            rival.desiredDirection = decision.direction;
+            rival.bombIntent = false;
+            rival.nextDecisionTick = tick + 1;
+          } else {
+            rival.desiredDirection = null;
+            rival.nextDecisionTick = Math.min(rival.nextDecisionTick, tick + 2);
+          }
+        }
+      }
+
+      // Stop on a safe tile beside a brick so the next decision can open the
+      // maze. Without this pause, a continuously moving rival can orbit a
+      // pocket forever and never get a chance to bomb.
+      if (!inDanger && isMoving(rival.movement) && touchesBrick(rival.movement.to)) {
         rival.desiredDirection = null;
-        // Re-decide almost immediately so the rival leaves its own blast.
-        rival.nextDecisionTick = tick + 3;
+        rival.nextDecisionTick = Math.min(rival.nextDecisionTick, tick + 1);
+      }
+
+      if (rival.bombIntent) {
+        const placed = placeRivalBomb(rival, events);
+        rival.bombIntent = false;
+        if (placed) {
+          if (!isMoving(rival.movement)) {
+            rival.desiredDirection = null;
+          }
+          // Re-decide almost immediately so the rival leaves its own blast.
+          rival.nextDecisionTick = tick + 3;
+        } else {
+          // The tile filled up in the meantime. Re-evaluate instead of
+          // freezing on a brick-adjacent tile with a bomb at its feet.
+          rival.nextDecisionTick = tick + 1;
+        }
       }
 
       tickMovement(rival.movement, rival.desiredDirection, canRivalEnter, {
@@ -553,15 +622,15 @@ export function createStage(options: StageOptions): Stage {
     };
   }
 
-  function placeRivalBomb(rival: MutableRival, events: StageEvent[]): void {
+  function placeRivalBomb(rival: MutableRival, events: StageEvent[]): boolean {
     const active = bombs.filter((bomb) => bomb.owner === rival.config.id).length;
     if (active >= rival.bombCapacity) {
-      return;
+      return false;
     }
 
     const target = isMoving(rival.movement) ? rival.movement.from : rival.movement.to;
     if (bombAt(target.x, target.y) !== null) {
-      return;
+      return false;
     }
 
     const bomb: MutableBomb = {
@@ -584,11 +653,12 @@ export function createStage(options: StageOptions): Stage {
       fuseTicks: bomb.fuseTicks,
       range: bomb.range,
     });
+    return true;
   }
 
   function checkRivalBlastHits(events: StageEvent[]): void {
     for (const rival of rivals) {
-      if (!rival.alive) {
+      if (!rival.alive || rival.invulnerableTicks > 0) {
         continue;
       }
       const tile = rival.movement.to;
