@@ -273,7 +273,9 @@ function drawBlasts(
     context.fillStyle = '#ff7a2f';
     context.fillRect(pixelX, pixelY, TILE_SIZE, TILE_SIZE);
     context.globalAlpha = flicker;
-    context.drawImage(sprites.blast, pixelX, pixelY, TILE_SIZE, TILE_SIZE);
+    const frame = Math.floor((state.tick + blast.tile.x * 3 + blast.tile.y * 5) / 3) % 3;
+    const sprite = frame === 0 ? sprites.blast : frame === 1 ? sprites.blastB : sprites.blastC;
+    context.drawImage(sprite, pixelX, pixelY, TILE_SIZE, TILE_SIZE);
   }
 
   context.globalAlpha = 1;

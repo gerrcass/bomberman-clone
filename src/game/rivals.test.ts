@@ -131,3 +131,27 @@ describe('stage scaling', () => {
     expect(rivalBlastRangeForStage(1000)).toBe(8);
   });
 });
+
+describe('simultaneous run end and stage clear', () => {
+  it('ends the run when the last life and the last rival are lost in one tick', () => {
+    const stage = createStage({
+      seed: 77,
+      arena: ['#######', '#R....#', '#.....#', '#P....#', '#.....#', '#######'],
+      rivalCount: 1,
+      rivalSpawns: [{ x: 1, y: 1 }],
+      lives: 1,
+      blastRange: 2,
+      fuseMs: 100,
+    });
+
+    const events: StageEvent[] = [...tickStage(stage, { bomb: true })];
+    events.push(...run(stage, 20));
+    const state = getStageState(stage);
+
+    expect(state.status).toBe('gameover');
+    expect(state.lives).toBe(0);
+    expect(state.rivals[0]?.alive).toBe(false);
+    expect(events.some((event) => event.type === 'stage-cleared')).toBe(false);
+    expect(events.some((event) => event.type === 'game-over')).toBe(true);
+  });
+});

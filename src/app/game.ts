@@ -516,6 +516,24 @@ export function createGameApp(doc: Document): GameApp {
     focusable[nextIndex]?.focus();
   }
 
+  function trapDialogFocus(event: KeyboardEvent, container: HTMLElement): void {
+    if (event.key !== 'Tab' || container.hidden) {
+      return;
+    }
+    const focusable = Array.from(
+      container.querySelectorAll<HTMLElement>('button, input, [tabindex]:not([tabindex="-1"])'),
+    ).filter((element) => !element.hasAttribute('disabled'));
+    if (focusable.length === 0) {
+      return;
+    }
+    const currentIndex = focusable.indexOf(doc.activeElement as HTMLElement);
+    const delta = event.shiftKey ? -1 : 1;
+    const nextIndex =
+      currentIndex === -1 ? 0 : (currentIndex + delta + focusable.length) % focusable.length;
+    event.preventDefault();
+    focusable[nextIndex]?.focus();
+  }
+
   function onIntermissionKeyDown(event: KeyboardEvent): void {
     if (screen !== 'intermission') {
       return;
@@ -619,6 +637,12 @@ export function createGameApp(doc: Document): GameApp {
   settingReducedMotion.addEventListener('change', onSettingChange);
   settingHighContrast.addEventListener('change', onSettingChange);
   pauseScreen.addEventListener('keydown', onPauseScreenKeyDown);
+  gameoverScreen.addEventListener('keydown', (event) => trapDialogFocus(event, gameoverScreen));
+  intermissionScreen.addEventListener('keydown', (event) =>
+    trapDialogFocus(event, intermissionScreen),
+  );
+  howToScreen.addEventListener('keydown', (event) => trapDialogFocus(event, howToScreen));
+  settingsScreen.addEventListener('keydown', (event) => trapDialogFocus(event, settingsScreen));
   doc.addEventListener('keydown', onGlobalKeyDown);
   win.addEventListener('pointerdown', () => audio.unlock(), { once: true });
   win.addEventListener('keydown', () => audio.unlock(), { once: true });

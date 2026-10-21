@@ -153,6 +153,16 @@ const BLAST_PALETTE: Palette = {
   '4': '#ffe27a',
 };
 
+const BLAST_B_PALETTE: Palette = {
+  '3': '#ffb347',
+  '4': '#ffffff',
+};
+
+const BLAST_C_PALETTE: Palette = {
+  '3': '#ff6b6b',
+  '4': '#ffe27a',
+};
+
 const POWERUP_BOMB = [
   '................',
   '................',
@@ -278,6 +288,8 @@ export interface SpriteSet {
   readonly brick: HTMLCanvasElement;
   readonly bomb: HTMLCanvasElement;
   readonly blast: HTMLCanvasElement;
+  readonly blastB: HTMLCanvasElement;
+  readonly blastC: HTMLCanvasElement;
   readonly powerUpBomb: HTMLCanvasElement;
   readonly powerUpFire: HTMLCanvasElement;
   readonly powerUpSpeed: HTMLCanvasElement;
@@ -297,6 +309,8 @@ export function createSprites(): SpriteSet {
     brick: createPixelSprite(createTerrainMatrix('brick'), BRICK_PALETTE, SPRITE_SCALE),
     bomb: createPixelSprite(BOMB, BOMB_PALETTE, SPRITE_SCALE),
     blast: createPixelSprite(BLAST, BLAST_PALETTE, SPRITE_SCALE),
+    blastB: createPixelSprite(BLAST, BLAST_B_PALETTE, SPRITE_SCALE),
+    blastC: createPixelSprite(BLAST, BLAST_C_PALETTE, SPRITE_SCALE),
     powerUpBomb: createPixelSprite(POWERUP_BOMB, POWERUP_BOMB_PALETTE, SPRITE_SCALE),
     powerUpFire: createPixelSprite(POWERUP_FIRE, POWERUP_FIRE_PALETTE, SPRITE_SCALE),
     powerUpSpeed: createPixelSprite(POWERUP_SPEED, POWERUP_SPEED_PALETTE, SPRITE_SCALE),

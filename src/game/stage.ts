@@ -792,6 +792,11 @@ export function createStage(options: StageOptions): Stage {
       for (const bomb of bombs) {
         nearestDanger = Math.min(nearestDanger, manhattan(corner, bomb.tile));
       }
+      for (const rival of rivals) {
+        if (rival.alive) {
+          nearestDanger = Math.min(nearestDanger, manhattan(corner, rival.movement.to));
+        }
+      }
 
       if (nearestDanger > bestDistance) {
         bestDistance = nearestDanger;
