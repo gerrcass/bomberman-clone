@@ -155,3 +155,23 @@ describe('simultaneous run end and stage clear', () => {
     expect(events.some((event) => event.type === 'game-over')).toBe(true);
   });
 });
+
+describe('generated-stage safety', () => {
+  it('keeps rivals alive and moving without player pressure', () => {
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      const stage = createStage({ seed, stage: 1, lives: 3 });
+      run(stage, 600);
+      const state = getStageState(stage);
+
+      expect(state.status, `seed ${seed} should still be playing`).toBe('playing');
+      expect(
+        state.stats.rivalsDefeated,
+        `seed ${seed} should not self-clear the stage`,
+      ).toBeLessThanOrEqual(1);
+      expect(
+        state.stats.bricksDestroyed,
+        `seed ${seed} should show rivals digging`,
+      ).toBeGreaterThan(0);
+    }
+  });
+});
