@@ -41,6 +41,7 @@ import {
   speedForStacks,
 } from './powerups';
 import { createRng } from './rng';
+import { INITIAL_TECHNIQUES, ownsTechnique, type TechniqueCounts } from './techniques';
 import {
   type ArenaState,
   BASE_BLAST_RANGE,
@@ -94,6 +95,8 @@ export interface StageOptions {
   readonly initialScore?: number;
   /** Multiplier applied to every point award; defaults to 1. */
   readonly scoreMultiplier?: number;
+  /** Techniques owned for the rest of the run; defaults to none. */
+  readonly techniques?: TechniqueCounts;
   /**
    * Test/fixture override for hidden power-ups. Production stages derive a
    * seeded layout from the arena bricks. A tile without a brick is revealed
@@ -135,6 +138,7 @@ interface MutableBomb {
   fuseRemainingTicks: number;
   readonly range: number;
   readonly placedAtTick: number;
+  readonly remote: boolean;
 }
 
 interface MutableBlast {
@@ -167,6 +171,7 @@ export function createStage(options: StageOptions): Stage {
   }
 
   const stageNumber = options.stage ?? 1;
+  const techniques = options.techniques ?? INITIAL_TECHNIQUES;
   let bombCapacity = clampStat(options.bombCapacity ?? BASE_BOMB_CAPACITY, 1, MAX_BOMB_CAPACITY);
   let blastRange = clampStat(options.blastRange ?? BASE_BLAST_RANGE, 1, MAX_BLAST_RANGE);
   let speedTier = clampStat(options.speedStacks ?? 0, 0, MAX_SPEED_STACKS);
@@ -256,8 +261,13 @@ export function createStage(options: StageOptions): Stage {
         });
       }
 
+      // A dead player cannot trigger techniques. Reading this after placement
+      // lets a press detonate a bomb placed in the same tick.
+      const remoteDetonation =
+        intent.detonate === true && playerAlive && ownsTechnique(techniques, 'remote');
+
       tickRivals(events);
-      resolveBombs(events);
+      resolveBombs(events, remoteDetonation);
 
       if (playerAlive) {
         collectPowerUps(events);
@@ -298,6 +308,7 @@ export function createStage(options: StageOptions): Stage {
         speedTier,
         shieldCharges,
         fuseMs: ticksToMs(fuseTicks),
+        techniques: { ...techniques },
         bombs: bombs.map(snapshotBomb),
         blasts: [...blasts.values()]
           .sort((a, b) => a.tile.y - b.tile.y || a.tile.x - b.tile.x)
@@ -641,6 +652,7 @@ export function createStage(options: StageOptions): Stage {
       fuseRemainingTicks: fuseTicks,
       range: rival.blastRange,
       placedAtTick: tick,
+      remote: false,
     };
     nextBombId += 1;
     bombs.push(bomb);
@@ -845,6 +857,8 @@ export function createStage(options: StageOptions): Stage {
       fuseRemainingTicks: fuseTicks,
       range: blastRange,
       placedAtTick: tick,
+      // Captured at placement: later technique changes never rewrite a live bomb.
+      remote: ownsTechnique(techniques, 'remote'),
     };
     nextBombId += 1;
     bombs.push(bomb);
@@ -862,12 +876,18 @@ export function createStage(options: StageOptions): Stage {
 
   /**
    * Ages every existing fuse, then resolves all detonations for this tick.
-   * Bombs whose fuses expire seed a FIFO queue; bombs reached by a blast join
-   * the same queue, so chain reactions resolve before the tick ends.
+   * Bombs whose fuses expire seed a FIFO queue; a Remote Detonation press
+   * seeds every live bomb the player owns, including one placed this tick.
+   * Bombs reached by a blast join the same queue, so chains resolve before
+   * the tick ends exactly as they do for a fuse detonation.
    */
-  function resolveBombs(events: StageEvent[]): void {
+  function resolveBombs(events: StageEvent[], remoteDetonation: boolean): void {
     const due: MutableBomb[] = [];
     for (const bomb of bombs) {
+      if (remoteDetonation && bomb.remote) {
+        due.push(bomb);
+        continue;
+      }
       if (bomb.placedAtTick === tick) {
         continue;
       }
@@ -1100,6 +1120,7 @@ function snapshotBomb(bomb: MutableBomb): BombState {
     fuseRemainingTicks: bomb.fuseRemainingTicks,
     fuseRemainingMs: ticksToMs(bomb.fuseRemainingTicks),
     range: bomb.range,
+    remote: bomb.remote,
   };
 }
 

@@ -1,3 +1,5 @@
+import type { TechniqueCounts } from './techniques';
+
 /** Shared vocabulary for the deterministic simulation. */
 
 export const TICKS_PER_SECOND = 60;
@@ -119,6 +121,8 @@ export interface BombState {
   readonly fuseRemainingTicks: number;
   readonly fuseRemainingMs: number;
   readonly range: number;
+  /** True when the owner may detonate this bomb early (captured at placement). */
+  readonly remote: boolean;
 }
 
 /** Read-only view of one live blast tile. */
@@ -157,6 +161,8 @@ export interface StageState {
   readonly shieldCharges: number;
   /** Fuse duration for newly placed bombs, in milliseconds. */
   readonly fuseMs: number;
+  /** Techniques owned by the player for the rest of the run. */
+  readonly techniques: TechniqueCounts;
   readonly bombs: readonly BombState[];
   readonly blasts: readonly BlastState[];
   readonly powerUps: readonly PowerUpState[];
@@ -168,6 +174,8 @@ export interface StageState {
 export interface Intent {
   readonly direction?: Direction | null;
   readonly bomb?: boolean;
+  /** Edge-triggered: detonate every live bomb the player owns immediately. */
+  readonly detonate?: boolean;
 }
 
 /**
