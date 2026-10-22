@@ -204,16 +204,31 @@ function drawHighContrastTerrain(context: CanvasRenderingContext2D, state: Stage
 }
 
 function drawHighContrastHazards(context: CanvasRenderingContext2D, state: StageState): void {
-  context.strokeStyle = '#ffffff';
-  context.lineWidth = 2;
   for (const blast of state.blasts) {
+    // Piercing tiles get a cyan, heavier outline so they stay distinct from a
+    // classic white hazard without relying on the tint underneath.
+    context.strokeStyle = blast.piercing ? '#7df9ff' : '#ffffff';
+    context.lineWidth = blast.piercing ? 3 : 2;
     context.strokeRect(
       blast.tile.x * TILE_SIZE + 2,
       blast.tile.y * TILE_SIZE + 2,
       TILE_SIZE - 4,
       TILE_SIZE - 4,
     );
+    if (blast.piercing) {
+      // A second, inset frame makes the marker a shape cue as well as a colour
+      // cue, so it survives forced-colours and low-vision viewing.
+      context.lineWidth = 1.5;
+      context.strokeRect(
+        blast.tile.x * TILE_SIZE + 8,
+        blast.tile.y * TILE_SIZE + 8,
+        TILE_SIZE - 16,
+        TILE_SIZE - 16,
+      );
+    }
   }
+  context.strokeStyle = '#ffffff';
+  context.lineWidth = 2;
   for (const powerUp of state.powerUps) {
     context.strokeRect(
       powerUp.tile.x * TILE_SIZE + 5,
@@ -270,12 +285,25 @@ function drawBlasts(
       : 0.84 + 0.16 * Math.sin((state.tick + blast.tile.x * 5 + blast.tile.y * 7) * 0.8);
 
     context.globalAlpha = 0.24 * flicker;
-    context.fillStyle = '#ff7a2f';
+    context.fillStyle = blast.piercing ? '#2fd6e6' : '#ff7a2f';
     context.fillRect(pixelX, pixelY, TILE_SIZE, TILE_SIZE);
     context.globalAlpha = flicker;
     const frame = Math.floor((state.tick + blast.tile.x * 3 + blast.tile.y * 5) / 3) % 3;
     const sprite = frame === 0 ? sprites.blast : frame === 1 ? sprites.blastB : sprites.blastC;
     context.drawImage(sprite, pixelX, pixelY, TILE_SIZE, TILE_SIZE);
+
+    if (blast.piercing) {
+      // A static cyan core distinguishes the longer ray in both motion modes.
+      const inset = TILE_SIZE * 0.3;
+      context.globalAlpha = 0.55;
+      context.fillStyle = '#b9fbff';
+      context.fillRect(
+        pixelX + inset,
+        pixelY + inset,
+        TILE_SIZE - inset * 2,
+        TILE_SIZE - inset * 2,
+      );
+    }
   }
 
   context.globalAlpha = 1;

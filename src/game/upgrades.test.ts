@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { createRng } from './rng';
-import { INITIAL_TECHNIQUES, TECHNIQUE_DEFINITIONS } from './techniques';
+import {
+  INITIAL_TECHNIQUES,
+  OFFERED_TECHNIQUES,
+  TECHNIQUE_DEFINITIONS,
+  type TechniqueCounts,
+  type TechniqueId,
+} from './techniques';
 import {
   applyUpgrade,
   blastRangeFor,
@@ -26,24 +32,25 @@ function maxedCounts(): UpgradeCounts {
   };
 }
 
-const OWNED_REMOTE = { ...INITIAL_TECHNIQUES, remote: 1 } as const;
+const OWNED_REMOTE: TechniqueCounts = { ...INITIAL_TECHNIQUES, remote: 1 };
+const OWNED_ALL: TechniqueCounts = { ...INITIAL_TECHNIQUES, kick: 1, remote: 1, pierce: 1 };
 
 function draftContext(overrides: {
   counts?: UpgradeCounts;
   lives?: number;
   shieldCharges?: number;
-  remoteOwned?: boolean;
+  techniques?: TechniqueCounts;
 }): {
   counts: UpgradeCounts;
   lives: number;
   shieldCharges: number;
-  techniques: typeof INITIAL_TECHNIQUES;
+  techniques: TechniqueCounts;
 } {
   return {
     counts: overrides.counts ?? INITIAL_UPGRADES,
     lives: overrides.lives ?? 3,
     shieldCharges: overrides.shieldCharges ?? 0,
-    techniques: overrides.remoteOwned === true ? OWNED_REMOTE : INITIAL_TECHNIQUES,
+    techniques: overrides.techniques ?? INITIAL_TECHNIQUES,
   };
 }
 
@@ -81,30 +88,53 @@ describe('upgrade definitions and stat helpers', () => {
 describe('upgrade draft', () => {
   it('reserves one slot for an unowned technique and fills the rest with stat cards', () => {
     const draft = draftUpgrades(draftContext({}), createRng(1));
+    const techniqueCards = draft.filter((card) => isTechniqueId(card));
 
     expect(draft).toHaveLength(3);
     expect(new Set(draft).size).toBe(3);
-    expect(draft.filter((card) => isTechniqueId(card))).toEqual(['remote']);
+    expect(techniqueCards).toHaveLength(1);
+    expect(OFFERED_TECHNIQUES).toContain(techniqueCards[0]);
     expect(draft.filter((card) => !isTechniqueId(card))).toHaveLength(2);
     expect(draft).not.toContain('cache');
-    expect(draft).not.toContain('kick');
-    expect(draft).not.toContain('pierce');
   });
 
-  it('offers only techniques that are ready to draft', () => {
-    for (let seed = 1; seed <= 12; seed += 1) {
+  it('offers Piercing Blast through the technique slot', () => {
+    const seen = new Set<TechniqueId>();
+
+    for (let seed = 1; seed <= 24; seed += 1) {
       const draft = draftUpgrades(draftContext({}), createRng(seed));
-      expect(draft.filter((card) => isTechniqueId(card))).toEqual(['remote']);
+      const techniqueCards = draft.filter((card) => isTechniqueId(card));
+
+      expect(techniqueCards).toHaveLength(1);
+      expect(OFFERED_TECHNIQUES).toContain(techniqueCards[0]);
+      if (techniqueCards[0] !== undefined) {
+        seen.add(techniqueCards[0]);
+      }
+    }
+
+    expect(seen).toContain('pierce');
+    expect(seen).toContain('remote');
+  });
+
+  it('excludes an owned technique while another remains eligible', () => {
+    for (let seed = 1; seed <= 12; seed += 1) {
+      const draft = draftUpgrades(draftContext({ techniques: OWNED_REMOTE }), createRng(seed));
+      const techniqueCards = draft.filter((card) => isTechniqueId(card));
+
+      expect(draft).toHaveLength(3);
+      expect(draft).not.toContain('remote');
+      expect(techniqueCards).toHaveLength(1);
+      expect(techniqueCards[0]).not.toBe('remote');
+      expect(OFFERED_TECHNIQUES).toContain(techniqueCards[0]);
     }
   });
 
-  it('excludes owned techniques from the draft and keeps three stat cards', () => {
+  it('keeps three stat cards when every technique is owned', () => {
     for (let seed = 1; seed <= 12; seed += 1) {
-      const draft = draftUpgrades(draftContext({ remoteOwned: true }), createRng(seed));
+      const draft = draftUpgrades(draftContext({ techniques: OWNED_ALL }), createRng(seed));
 
       expect(draft).toHaveLength(3);
       expect(new Set(draft).size).toBe(3);
-      expect(draft).not.toContain('remote');
       expect(draft.some((card) => isTechniqueId(card))).toBe(false);
     }
   });
@@ -119,7 +149,14 @@ describe('upgrade draft', () => {
       createRng(2),
     );
 
-    expect(draft).toEqual(['remote', 'cache', 'cache']);
+    const technique = draft[0];
+    expect(draft).toHaveLength(3);
+    if (technique === undefined) {
+      return;
+    }
+    expect(isTechniqueId(technique)).toBe(true);
+    expect(OFFERED_TECHNIQUES).toContain(technique);
+    expect(draft.slice(1)).toEqual(['cache', 'cache']);
   });
 
   it('fills every slot with Arena Cache when every technique is owned and stats are capped', () => {
@@ -188,6 +225,10 @@ describe('applying upgrades', () => {
 
     const repeated = applyUpgrade('remote', { ...base, techniques: granted.techniques });
     expect(repeated.techniques.remote).toBe(1);
+
+    const pierced = applyUpgrade('pierce', base);
+    expect(pierced.techniques.pierce).toBe(1);
+    expect(pierced.counts).toEqual(INITIAL_UPGRADES);
 
     expect(applyUpgrade('bomb', base).techniques).toEqual(INITIAL_TECHNIQUES);
   });

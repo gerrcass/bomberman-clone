@@ -139,12 +139,14 @@ interface MutableBomb {
   readonly range: number;
   readonly placedAtTick: number;
   readonly remote: boolean;
+  readonly piercing: boolean;
 }
 
 interface MutableBlast {
   readonly tile: TileCoord;
   remainingTicks: number;
   readonly sourceBombId: number;
+  piercing: boolean;
 }
 
 interface MutableRival {
@@ -653,6 +655,7 @@ export function createStage(options: StageOptions): Stage {
       range: rival.blastRange,
       placedAtTick: tick,
       remote: false,
+      piercing: false,
     };
     nextBombId += 1;
     bombs.push(bomb);
@@ -859,6 +862,7 @@ export function createStage(options: StageOptions): Stage {
       placedAtTick: tick,
       // Captured at placement: later technique changes never rewrite a live bomb.
       remote: ownsTechnique(techniques, 'remote'),
+      piercing: ownsTechnique(techniques, 'pierce'),
     };
     nextBombId += 1;
     bombs.push(bomb);
@@ -925,7 +929,7 @@ export function createStage(options: StageOptions): Stage {
       });
 
       const blastTiles: TileCoord[] = [];
-      addBlastTile(blastTiles, bomb.id, bomb.tile.x, bomb.tile.y);
+      addBlastTile(blastTiles, bomb.id, bomb.tile.x, bomb.tile.y, bomb.piercing);
 
       for (const direction of BLAST_DIRECTIONS) {
         const delta = directionDelta(direction);
@@ -938,10 +942,15 @@ export function createStage(options: StageOptions): Stage {
             break;
           }
 
-          addBlastTile(blastTiles, bomb.id, x, y);
+          addBlastTile(blastTiles, bomb.id, x, y, bomb.piercing);
 
           if (kind === 'brick') {
             destroyBrick(x, y, events);
+            // A piercing ray keeps travelling for its full range, so every
+            // brick in the line is destroyed in the same detonation.
+            if (bomb.piercing) {
+              continue;
+            }
             break;
           }
 
@@ -964,7 +973,13 @@ export function createStage(options: StageOptions): Stage {
     }
   }
 
-  function addBlastTile(blastTiles: TileCoord[], sourceBombId: number, x: number, y: number): void {
+  function addBlastTile(
+    blastTiles: TileCoord[],
+    sourceBombId: number,
+    x: number,
+    y: number,
+    piercing: boolean,
+  ): void {
     blastTiles.push({ x, y });
     const key = tileKey(x, y);
     const existing = blasts.get(key);
@@ -973,10 +988,14 @@ export function createStage(options: StageOptions): Stage {
         tile: { x, y },
         remainingTicks: BLAST_LIFETIME_TICKS,
         sourceBombId,
+        piercing,
       });
     } else {
-      // Overlapping blasts share one tile and refresh to a full lifetime.
+      // Overlapping blasts share one tile and refresh to a full lifetime. The
+      // marker survives if any contributor pierces, even when a classic blast
+      // lands on the tile afterwards.
       existing.remainingTicks = Math.max(existing.remainingTicks, BLAST_LIFETIME_TICKS);
+      existing.piercing = existing.piercing || piercing;
     }
   }
 
@@ -1121,6 +1140,7 @@ function snapshotBomb(bomb: MutableBomb): BombState {
     fuseRemainingMs: ticksToMs(bomb.fuseRemainingTicks),
     range: bomb.range,
     remote: bomb.remote,
+    piercing: bomb.piercing,
   };
 }
 
@@ -1130,6 +1150,7 @@ function snapshotBlast(blast: MutableBlast): BlastState {
     remainingTicks: blast.remainingTicks,
     remainingMs: ticksToMs(blast.remainingTicks),
     sourceBombId: blast.sourceBombId,
+    piercing: blast.piercing,
   };
 }
 

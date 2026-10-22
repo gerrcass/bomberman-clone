@@ -73,6 +73,7 @@ interface BombLike {
   readonly id: number;
   readonly tile: TileCoord;
   readonly range: number;
+  readonly piercing: boolean;
 }
 
 const DIRECTIONS: readonly Direction[] = ['up', 'left', 'down', 'right'];
@@ -123,8 +124,9 @@ export function tileKey(tile: TileCoord): string {
 
 /**
  * Builds the set of tiles covered by live blasts or by any bomb's predicted
- * blast. Predicted blasts include chain reactions and stop at walls and after
- * the first brick, matching real detonation geometry.
+ * blast. Predicted blasts include chain reactions and stop at walls, matching
+ * real detonation geometry. A classic ray stops after the first brick; a
+ * piercing ray continues for its full range.
  */
 export function buildDangerMap(
   arena: ArenaState,
@@ -165,6 +167,9 @@ export function buildDangerMap(
 
         danger.add(`${x},${y}`);
         if (kind === 'brick') {
+          if (bomb.piercing) {
+            continue;
+          }
           break;
         }
 
@@ -461,7 +466,12 @@ export function decideRivalAction(self: RivalView, world: RivalWorld): RivalDeci
     if (!bombTileFree) {
       return false;
     }
-    const hypothetical: BombLike = { id: -1, tile: bombTile, range: self.blastRange };
+    const hypothetical: BombLike = {
+      id: -1,
+      tile: bombTile,
+      range: self.blastRange,
+      piercing: false,
+    };
     const bombsWithHypothetical: BombLike[] = [...world.bombs, hypothetical];
     const dangerWithBomb = buildDangerMap(world.arena, bombsWithHypothetical, world.blasts);
     return hasEscapeRoute(bombTile, dangerWithBomb, canStep, world.rng);

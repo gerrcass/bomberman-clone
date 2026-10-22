@@ -58,10 +58,10 @@ export const TECHNIQUE_DEFINITIONS: Readonly<Record<TechniqueId, TechniqueDefini
 };
 
 /**
- * Techniques that may appear in the draft. Bomb Kick and Piercing Blast join
- * this pool in their own tickets; the model and the draft slot already exist.
+ * Techniques that may appear in the draft. Bomb Kick joins this pool in its
+ * own ticket; the model and the draft slot already exist.
  */
-export const OFFERED_TECHNIQUES: readonly TechniqueId[] = ['remote'];
+export const OFFERED_TECHNIQUES: readonly TechniqueId[] = ['remote', 'pierce'];
 
 /** Stable display order for the HUD strip. */
 export const TECHNIQUE_ORDER: readonly TechniqueId[] = ['kick', 'remote', 'pierce'];
