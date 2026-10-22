@@ -12,6 +12,7 @@ import {
   type StatUpgradeId,
   TECHNIQUE_DEFINITIONS,
   type TechniqueCounts,
+  type TechniqueId,
   UPGRADE_DEFINITIONS,
   type UpgradeId,
 } from '../game';
@@ -721,23 +722,23 @@ export function createGameApp(doc: Document): GameApp {
   if (import.meta.env.DEV) {
     const debugWindow = win as Window & {
       __bombBlitzDebug?: {
-        showIntermission(): void;
+        showIntermission(draft?: readonly UpgradeId[]): void;
         showGameOver(): void;
         forceRunOver(): void;
-        startTechniqueRun(): void;
+        startTechniqueRun(technique?: TechniqueId): void;
         startKickRun(): void;
         state(): unknown;
       };
     };
     debugWindow.__bombBlitzDebug = {
-      showIntermission(): void {
+      showIntermission(draft: readonly UpgradeId[] = ['remote', 'bomb', 'fire']): void {
         const state = run.getState();
         showIntermission({
           ...state,
           status: 'intermission',
           lives: 2,
           score: 3450,
-          draft: ['kick', 'bomb', 'fire'],
+          draft: [...draft],
           lastClear: {
             stage: 1,
             basePoints: 1000,
@@ -754,11 +755,11 @@ export function createGameApp(doc: Document): GameApp {
         }
         showGameOver(run.getState());
       },
-      startTechniqueRun(): void {
+      startTechniqueRun(technique: TechniqueId = 'remote'): void {
         beginRun(
           createRun(TITLE_SEED, {
             firstStage: {
-              techniques: { ...INITIAL_TECHNIQUES, kick: 1, remote: 1 },
+              techniques: { ...INITIAL_TECHNIQUES, [technique]: 1 },
             },
           }),
         );
@@ -799,7 +800,10 @@ export function createGameApp(doc: Document): GameApp {
             moving: bomb.moving,
             position: bomb.position,
           })),
-          blasts: state.stageState.blasts.map((blast) => blast.tile),
+          blasts: state.stageState.blasts.map((blast) => ({
+            tile: blast.tile,
+            piercing: blast.piercing,
+          })),
           rivals: state.stageState.rivals.map((rival) => ({
             id: rival.id,
             alive: rival.alive,

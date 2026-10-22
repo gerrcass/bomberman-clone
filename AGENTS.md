@@ -70,7 +70,7 @@ npm run check      # lint + typecheck + test + build
 - A technique is player-only and run-scoped; rival bombs keep classic geometry.
 - A bomb placed mid-step goes on the tile being left, never the destination.
 - A rival occupies `movement.to` for hazards. A decision based only on `movement.from` walks rivals into fresh blasts.
-- A blast destroys the first brick, stops, and does not destroy revealed power-ups.
+- A blast destroys the first brick and stops unless the bomb is piercing; it does not destroy revealed power-ups.
 - Losing the last life ends the run even if the last rival dies in the same tick.
 - The game auto-pauses when the document becomes hidden and resumes paused.
 - Walls stop blast rays without producing a blast tile.

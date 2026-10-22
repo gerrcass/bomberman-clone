@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Stage } from './stage';
 import { createStage, getStageState, tickStage } from './stage';
 import { INITIAL_TECHNIQUES, type TechniqueCounts } from './techniques';
-import type { Intent, StageEvent } from './types';
+import { BLAST_LIFETIME_TICKS, type Intent, type StageEvent } from './types';
 
 /** Room wide enough to place two bombs and step between them. */
 const ROOM = ['#########', '#.......#', '#.......#', '#.......#', '#P......#', '#########'];
@@ -11,6 +11,29 @@ const ROOM = ['#########', '#.......#', '#.......#', '#.......#', '#P......#', '
 const CONTACT_CORRIDOR = ['#############', '#P.........R#', '#############'];
 
 const REMOTE: TechniqueCounts = { ...INITIAL_TECHNIQUES, remote: 1 };
+const PIERCE: TechniqueCounts = { ...INITIAL_TECHNIQUES, pierce: 1 };
+
+/** Three bricks in a line above the player's bomb column. */
+const BRICK_LINE = [
+  '#########',
+  '#B......#',
+  '#B......#',
+  '#B......#',
+  '#.......#',
+  '#P......#',
+  '#########',
+];
+
+/** A brick sits behind an interior wall on the bomb's ray. */
+const BRICK_BEHIND_WALL = [
+  '#########',
+  '#B......#',
+  '#.......#',
+  '##......#',
+  '#.......#',
+  '#P......#',
+  '#########',
+];
 
 function stageFrom(
   rows: readonly string[],
@@ -284,6 +307,243 @@ describe('Remote Detonation', () => {
     expect(firstRun.state).toEqual(secondRun.state);
     expect(firstRun.state.tick).toBe(180);
     expect(firstRun.events.filter((event) => event.type === 'bomb-detonated')).toHaveLength(2);
+  });
+});
+
+describe('Piercing Blast', () => {
+  function pierceStage(
+    rows: readonly string[],
+    options: Partial<Parameters<typeof createStage>[0]> = {},
+  ): Stage {
+    return stageFrom(rows, {
+      techniques: PIERCE,
+      blastRange: 4,
+      ...options,
+    });
+  }
+
+  /** Places a bomb under the brick line, steps clear, and waits out the fuse. */
+  function detonateBrickLine(stage: Stage): StageEvent[] {
+    const events: StageEvent[] = [...tickStage(stage, { bomb: true })];
+    events.push(...collect(stage, 70, { direction: 'right' }).events);
+    events.push(...collect(stage, 62).events);
+    return events;
+  }
+
+  it('destroys every brick in range, reveals each power-up, and marks piercing tiles', () => {
+    const stage = pierceStage(BRICK_LINE, {
+      hiddenPowerUps: [
+        { tile: { x: 1, y: 3 }, kind: 'bomb' },
+        { tile: { x: 1, y: 2 }, kind: 'fire' },
+        { tile: { x: 1, y: 1 }, kind: 'shield' },
+      ],
+    });
+
+    const events = detonateBrickLine(stage);
+    const state = getStageState(stage);
+
+    for (const y of [1, 2, 3]) {
+      expect(state.arena.tiles[y * state.arena.width + 1]).toBe('floor');
+    }
+    expect(events.filter((event) => event.type === 'brick-destroyed')).toHaveLength(3);
+    expect(
+      state.powerUps.map((powerUp) => `${powerUp.tile.x},${powerUp.tile.y}:${powerUp.kind}`),
+    ).toEqual(['1,1:shield', '1,2:fire', '1,3:bomb']);
+    expect(state.blasts.filter((blast) => blast.tile.x === 1).map((blast) => blast.tile.y)).toEqual(
+      [1, 2, 3, 4, 5],
+    );
+    expect(state.blasts.every((blast) => blast.piercing)).toBe(true);
+    expect(state.player.alive).toBe(true);
+
+    // The revealed power-ups outlive the blast that uncovered them.
+    collect(stage, BLAST_LIFETIME_TICKS + 1);
+    expect(getStageState(stage).blasts).toHaveLength(0);
+    expect(
+      getStageState(stage).powerUps.map((powerUp) => `${powerUp.tile.x},${powerUp.tile.y}`),
+    ).toEqual(['1,1', '1,2', '1,3']);
+  });
+
+  it('respects the blast range limit', () => {
+    const stage = pierceStage(BRICK_LINE, { blastRange: 3 });
+
+    detonateBrickLine(stage);
+    const state = getStageState(stage);
+
+    for (const y of [2, 3]) {
+      expect(state.arena.tiles[y * state.arena.width + 1]).toBe('floor');
+    }
+    expect(state.arena.tiles[1 * state.arena.width + 1]).toBe('brick');
+    expect(state.blasts.filter((blast) => blast.tile.x === 1).map((blast) => blast.tile.y)).toEqual(
+      [2, 3, 4, 5],
+    );
+    expect(state.stats.bricksDestroyed).toBe(2);
+  });
+
+  it('stops at a wall without producing a blast tile or breaking the brick behind it', () => {
+    const stage = pierceStage(BRICK_BEHIND_WALL);
+
+    detonateBrickLine(stage);
+    const state = getStageState(stage);
+
+    expect(state.arena.tiles[1 * state.arena.width + 1]).toBe('brick');
+    expect(state.blasts.filter((blast) => blast.tile.x === 1).map((blast) => blast.tile.y)).toEqual(
+      [4, 5],
+    );
+    expect(state.blasts.some((blast) => blast.tile.y === 3)).toBe(false);
+    expect(state.stats.bricksDestroyed).toBe(0);
+  });
+
+  it('leaves a classic player bomb stopping at the first brick', () => {
+    const stage = stageFrom(BRICK_LINE, { blastRange: 4 });
+
+    detonateBrickLine(stage);
+    const state = getStageState(stage);
+
+    expect(state.arena.tiles[3 * state.arena.width + 1]).toBe('floor');
+    expect(state.arena.tiles[2 * state.arena.width + 1]).toBe('brick');
+    expect(state.arena.tiles[1 * state.arena.width + 1]).toBe('brick');
+    expect(state.blasts.filter((blast) => blast.tile.x === 1).map((blast) => blast.tile.y)).toEqual(
+      [3, 4, 5],
+    );
+    expect(state.blasts.every((blast) => blast.piercing)).toBe(false);
+    expect(state.stats.bricksDestroyed).toBe(1);
+  });
+
+  it('chains a classic rival bomb through a brick and keeps the marker on overlapping tiles', () => {
+    const stage = stageFrom(
+      [
+        '##########',
+        '#........#',
+        '#.RB.....#',
+        '#........#',
+        '#.B......#',
+        '#........#',
+        '#........#',
+        '#P.......#',
+        '##########',
+      ],
+      {
+        techniques: { ...INITIAL_TECHNIQUES, remote: 1, pierce: 1 },
+        rivalCount: 1,
+        rivalSpawns: [{ x: 2, y: 2 }],
+        blastRange: 4,
+        fuseMs: 10000,
+      },
+    );
+
+    // Cinder opens by bombing the brick beside its spawn, so its classic bomb
+    // sits behind the player's brick line.
+    collect(stage, 20);
+    const playerBombTarget = { x: 2, y: 6 };
+    for (let index = 0; index < 120; index += 1) {
+      const player = getStageState(stage).player;
+      if (
+        !player.moving &&
+        player.tile.x === playerBombTarget.x &&
+        player.tile.y === playerBombTarget.y
+      ) {
+        break;
+      }
+      const at = player.moving ? player.to : player.tile;
+      const direction: 'up' | 'right' | null =
+        at.y > playerBombTarget.y ? 'up' : at.x < playerBombTarget.x ? 'right' : null;
+      tickStage(stage, { direction });
+    }
+    expect(getStageState(stage).player.tile).toEqual(playerBombTarget);
+
+    const rivalBomb = getStageState(stage).bombs.find((bomb) => bomb.owner === 'cinder');
+    expect(rivalBomb).toMatchObject({
+      tile: { x: 2, y: 2 },
+      piercing: false,
+      remote: false,
+    });
+
+    const events = tickStage(stage, { bomb: true, detonate: true });
+    const detonations = events.filter((event) => event.type === 'bomb-detonated');
+    expect(detonations).toContainEqual(expect.objectContaining({ owner: 'player', chain: false }));
+    expect(detonations).toContainEqual(expect.objectContaining({ owner: 'cinder', chain: true }));
+    expect(getStageState(stage).bombs).toHaveLength(0);
+
+    const state = getStageState(stage);
+    expect(state.arena.tiles[4 * state.arena.width + 2]).toBe('floor');
+
+    const overlap = state.blasts.find((blast) => blast.tile.x === 2 && blast.tile.y === 2);
+    expect(overlap?.piercing).toBe(true);
+    const shared = state.blasts.find((blast) => blast.tile.x === 2 && blast.tile.y === 3);
+    expect(shared?.piercing).toBe(true);
+    const classicOnly = state.blasts.find((blast) => blast.tile.x === 2 && blast.tile.y === 1);
+    expect(classicOnly?.piercing).toBe(false);
+  });
+
+  it('keeps rival bombs and rival blasts classic', () => {
+    const stage = stageFrom(
+      [
+        '##########',
+        '#........#',
+        '#.RBB....#',
+        '#........#',
+        '#........#',
+        '#........#',
+        '#........#',
+        '#P.......#',
+        '##########',
+      ],
+      {
+        stage: 5,
+        techniques: PIERCE,
+        rivalCount: 1,
+        rivalSpawns: [{ x: 2, y: 2 }],
+        fuseMs: 1000,
+      },
+    );
+
+    collect(stage, 20);
+    const rivalBomb = getStageState(stage).bombs.find((bomb) => bomb.owner === 'cinder');
+    expect(rivalBomb).toMatchObject({
+      tile: { x: 2, y: 2 },
+      range: 2,
+      piercing: false,
+    });
+
+    collect(stage, 55);
+    const state = getStageState(stage);
+
+    expect(state.arena.tiles[2 * state.arena.width + 3]).toBe('floor');
+    expect(state.arena.tiles[2 * state.arena.width + 4]).toBe('brick');
+    const rivalBlasts = state.blasts.filter((blast) => blast.tile.y === 2);
+    expect(rivalBlasts.map((blast) => blast.tile.x).sort((a, b) => a - b)).toEqual([1, 2, 3]);
+    expect(state.blasts.every((blast) => blast.piercing)).toBe(false);
+  });
+
+  it('replays identical states for the same seed and piercing intent script', () => {
+    const runScript = (stage: Stage): { events: StageEvent[]; state: StageStateSnapshot } => {
+      const events: StageEvent[] = [];
+      for (let index = 0; index < 200; index += 1) {
+        const direction = index < 70 ? 'right' : index % 45 === 0 ? 'left' : null;
+        const bomb = index === 0 || index === 40;
+        events.push(...tickStage(stage, { direction, bomb }));
+      }
+      return { events, state: getStageState(stage) };
+    };
+
+    const first = stageFrom(BRICK_LINE, {
+      techniques: PIERCE,
+      blastRange: 4,
+      bombCapacity: 2,
+    });
+    const second = stageFrom(BRICK_LINE, {
+      techniques: PIERCE,
+      blastRange: 4,
+      bombCapacity: 2,
+    });
+
+    const firstRun = runScript(first);
+    const secondRun = runScript(second);
+
+    expect(firstRun.events).toEqual(secondRun.events);
+    expect(firstRun.state).toEqual(secondRun.state);
+    expect(firstRun.state.tick).toBe(200);
+    expect(firstRun.events.filter((event) => event.type === 'brick-destroyed')).toHaveLength(3);
   });
 });
 

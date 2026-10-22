@@ -58,10 +58,10 @@ export const TECHNIQUE_DEFINITIONS: Readonly<Record<TechniqueId, TechniqueDefini
 };
 
 /**
- * Techniques that may appear in the draft. Piercing Blast joins this pool in
- * its own ticket; the model and the draft slot already exist.
+ * Techniques that may appear in the draft. All three techniques ship in the
+ * bomb-techniques slice.
  */
-export const OFFERED_TECHNIQUES: readonly TechniqueId[] = ['remote', 'kick'];
+export const OFFERED_TECHNIQUES: readonly TechniqueId[] = ['remote', 'kick', 'pierce'];
 
 /** Stable display order for the HUD strip. */
 export const TECHNIQUE_ORDER: readonly TechniqueId[] = ['kick', 'remote', 'pierce'];

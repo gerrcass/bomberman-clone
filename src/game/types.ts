@@ -134,6 +134,8 @@ export interface BombState {
   readonly range: number;
   /** True when the owner may detonate this bomb early (captured at placement). */
   readonly remote: boolean;
+  /** True when this bomb's rays continue through bricks (captured at placement). */
+  readonly piercing: boolean;
   /** Tile the slide started from, or the resting tile. */
   readonly from: TileCoord;
   /** Tile the slide is entering, or the resting tile. */
@@ -152,6 +154,8 @@ export interface BlastState {
   readonly remainingMs: number;
   /** Bomb whose blast first covered this tile. */
   readonly sourceBombId: number;
+  /** True when any bomb contributing to this tile pierces bricks. */
+  readonly piercing: boolean;
 }
 
 /** Counters accumulated during one stage. */

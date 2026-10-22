@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createRun, type RunOptions, stageSeed } from './run';
+import { INITIAL_TECHNIQUES, OFFERED_TECHNIQUES } from './techniques';
 import { isTechniqueId } from './upgrades';
 
 const CLEARABLE = [
@@ -41,7 +42,9 @@ describe('technique carry-over', () => {
     expect(state.status).toBe('intermission');
     expect(state.draft).toHaveLength(3);
     expect(new Set(state.draft).size).toBe(3);
-    expect(state.draft.filter((card) => isTechniqueId(card))).toEqual(['remote']);
+    const techniqueCards = state.draft.filter((card) => isTechniqueId(card));
+    expect(techniqueCards).toHaveLength(1);
+    expect(OFFERED_TECHNIQUES).toContain(techniqueCards[0]);
     expect(state.draft.filter((card) => !isTechniqueId(card))).toHaveLength(2);
   });
 
@@ -49,7 +52,7 @@ describe('technique carry-over', () => {
     const run = clearFirstStage();
     const choice = run.getState().draft.find((card) => isTechniqueId(card));
 
-    expect(choice).toBe('remote');
+    expect(choice).toBeDefined();
     if (choice === undefined) {
       return;
     }
@@ -60,12 +63,13 @@ describe('technique carry-over', () => {
     expect(after.status).toBe('playing');
     expect(after.stage).toBe(2);
     expect(after.draft).toEqual([]);
-    expect(after.techniques).toEqual({ kick: 0, remote: 1, pierce: 0 });
-    expect(after.stageState.techniques).toEqual({ kick: 0, remote: 1, pierce: 0 });
+    expect(after.techniques[choice]).toBe(1);
+    expect(after.stageState.techniques).toEqual(after.techniques);
+    expect(Object.values(after.techniques).reduce((sum, count) => sum + count, 0)).toBe(1);
   });
 
   it('offers Bomb Kick and carries it into the next stage', () => {
-    const run = clearFirstStage(4);
+    const run = clearFirstStage(9);
     const state = run.getState();
 
     expect(state.status).toBe('intermission');
@@ -78,12 +82,16 @@ describe('technique carry-over', () => {
   });
 
   it('detonates through the run intent without waiting for the fuse', () => {
-    const run = clearFirstStage();
-    const choice = run.getState().draft.find((card) => isTechniqueId(card));
-    if (choice === undefined) {
-      return;
-    }
-    run.chooseUpgrade(choice);
+    const run = createRun(77, {
+      firstStage: {
+        arena: CLEARABLE,
+        rivalCount: 1,
+        rivalSpawns: [{ x: 3, y: 2 }],
+        blastRange: 2,
+        fuseMs: 900,
+        techniques: { ...INITIAL_TECHNIQUES, remote: 1 },
+      },
+    });
 
     const events = run.step({ bomb: true, detonate: true });
     const after = run.getState();
