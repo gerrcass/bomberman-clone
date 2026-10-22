@@ -430,6 +430,35 @@ describe('Bomb Kick slide', () => {
     expect(events.some((event) => event.type === 'bomb-kicked')).toBe(true);
   });
 
+  it('detonates when it slides into an already-live blast', () => {
+    const stage = stageFrom(ROOM, { bombCapacity: 2, fuseMs: 3000 });
+    placeAt(stage, { x: 5, y: 3 });
+    placeAt(stage, { x: 3, y: 3 });
+    walkTo(stage, { x: 2, y: 3 });
+
+    let live = false;
+    for (let index = 0; index < 240; index += 1) {
+      tickStage(stage, {});
+      live = getStageState(stage).blasts.some((blast) => blast.tile.x === 4 && blast.tile.y === 3);
+      if (live) {
+        break;
+      }
+    }
+    expect(live).toBe(true);
+
+    const kickEvents = tickStage(stage, { direction: 'right' });
+    expect(kickEvents.some((event) => event.type === 'bomb-kicked')).toBe(true);
+
+    const events: StageEvent[] = [...kickEvents];
+    for (let index = 0; index < 20; index += 1) {
+      events.push(...tickStage(stage, {}));
+    }
+
+    expect(events).toContainEqual(
+      expect.objectContaining({ type: 'bomb-detonated', bombId: 2, chain: true }),
+    );
+  });
+
   it("kicks a rival's resting bomb", () => {
     const stage = createStage({
       seed: 1,
