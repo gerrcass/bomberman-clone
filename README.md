@@ -30,6 +30,7 @@ Open the URL Vite prints (usually `http://localhost:5173`).
 | --- | --- |
 | Arrow keys or WASD | Move up, down, left, right |
 | Space | Place a bomb |
+| X | Detonate your live bombs early (Remote Detonation) |
 | Escape or P | Pause / resume, or back out of a menu |
 | M | Mute or unmute all audio |
 | Arrow keys, 1–3 | Focus and pick an upgrade card |
@@ -62,9 +63,17 @@ a 1.0× score multiplier, and a 2200 ms fuse.
   even if the last rival dies in the same tick.
 - **Clearing a stage** awards `1000 + 250 × (stage − 1)` plus a time bonus of
   `max(0, 1500 − 20 × elapsed seconds)`, shows a breakdown, and opens a draft of
-  three upgrades. Stat upgrades cap at Extra Bomb 8, Fire 8, Speed 5, Shield 2,
-  Extra Life 5, Score Multiplier 5, and Short Fuse 4; when fewer than three stat
-  upgrades remain, Arena Cache (+750 points) fills the draft.
+  three upgrades. Each intermission offers at most one **Technique** and fills
+  the other slots with stat upgrades. Stat upgrades cap at Extra Bomb 8, Fire 8,
+  Speed 5, Shield 2, Extra Life 5, Score Multiplier 5, and Short Fuse 4; when
+  fewer than three stat upgrades remain, Arena Cache (+750 points) fills the
+  draft.
+- **Techniques** are one-per-run upgrades that change how your bombs behave.
+  Bomb Kick sends a resting bomb sliding when you walk into it, stopping at
+  terrain, another bomb, or a bomber. Remote Detonation lets you press X to
+  trigger every live bomb you own; the fuse still runs as a safety. Piercing
+  Blast breaks every brick in range instead of stopping at the first. Rivals
+  keep classic bombs.
 - **Scoring:** bricks 10, pickups 25, rival defeats 500, plus stage-clear and
   time bonuses. The multiplier applies to every award.
 
@@ -97,6 +106,7 @@ src/game/                   Deterministic simulation (no DOM, Canvas, or audio)
   powerups.ts               Hidden power-up generation, caps, and weights
   stage.ts                  Stage seam: bombs, blasts, rivals, lives, pickups
   ai.ts                     Danger maps, escape routes, rival decisions
+  techniques.ts             Technique definitions, ownership, and caps
   upgrades.ts               Upgrade pool, draft, caps, and stat helpers
   run.ts                    Endless run loop, scoring, intermission state
 src/render/                 Runtime pixel art, particles, camera, Canvas renderer
@@ -131,8 +141,10 @@ placement and capacity, fuse timing, blast geometry and lifetime, wall and brick
 stopping, chain reactions, hidden power-up generation and guarantees, reveal
 and collection, stat caps, shield absorption, lives and respawns, rival danger
 maps and decisions, rival contact and defeats, stage clear, stage scaling,
-upgrade drafts and caps, scoring and multiplier rounding, run stats, profile
-defaults and malformed data, persistence, and fixed-seed determinism.
+technique ownership and the one-technique draft, Bomb Kick slides and blockers,
+Remote Detonation triggers, Piercing Blast rays, upgrade drafts and caps,
+scoring and multiplier rounding, run stats, profile defaults and malformed data,
+persistence, and fixed-seed determinism.
 
 Scenarios use small ASCII arena fixtures so each case reads as a maze:
 
@@ -145,10 +157,10 @@ tickStage(stage, { direction: 'right' });
 ```
 
 Each tick is exactly 1/60 second. `getStageState` exposes bombs, blasts,
-power-ups, bomber positions, and run stats to the renderer, HUD, and
+power-ups, bomber positions, techniques, and run stats to the renderer, HUD, and
 tests. Events are additive: movement, bomb, blast, brick, pickup, shield, hit,
-respawn, rival, stage-clear, and game-over events all flow through the tick
-return value.
+respawn, rival, kicked bomb, stage-clear, and game-over events all flow through
+the tick return value.
 
 ## Static build and deployment
 

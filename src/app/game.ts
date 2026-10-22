@@ -381,7 +381,12 @@ export function createGameApp(doc: Document): GameApp {
       if (technique) {
         card.dataset['kind'] = 'technique';
       }
-      card.setAttribute('aria-label', `${index + 1}. ${definition.name}: ${definition.effect}`);
+      card.setAttribute(
+        'aria-label',
+        technique
+          ? `${index + 1}. Technique: ${definition.name}. ${definition.effect}. Equip.`
+          : `${index + 1}. ${definition.name}: ${definition.effect}`,
+      );
 
       const key = doc.createElement('span');
       key.className = 'upgrade-key';
@@ -727,6 +732,8 @@ export function createGameApp(doc: Document): GameApp {
         forceRunOver(): void;
         startTechniqueRun(technique?: TechniqueId): void;
         startKickRun(): void;
+        startPierceRun(): void;
+        startDraftRun(): void;
         state(): unknown;
       };
     };
@@ -777,6 +784,53 @@ export function createGameApp(doc: Document): GameApp {
           }),
         );
       },
+      startPierceRun(): void {
+        // Three bricks in one ray, with a long fuse so the player can clear
+        // the lane and watch the whole line break.
+        beginRun(
+          createRun(TITLE_SEED, {
+            firstStage: {
+              arena: [
+                '#########',
+                '#B......#',
+                '#B......#',
+                '#B......#',
+                '#.......#',
+                '#P......#',
+                '#########',
+              ],
+              rivalCount: 0,
+              blastRange: 4,
+              fuseMs: 2500,
+              techniques: { ...INITIAL_TECHNIQUES, pierce: 1 },
+            },
+          }),
+        );
+      },
+      startDraftRun(): void {
+        // A rival sealed in a one-tile pocket dies to the player's first
+        // bomb, so a real intermission (and its keyboard path) is reachable
+        // without replaying a full stage.
+        beginRun(
+          createRun(TITLE_SEED, {
+            firstStage: {
+              arena: [
+                '#########',
+                '#.......#',
+                '#......##',
+                '#.....PR#',
+                '#......##',
+                '#.......#',
+                '#########',
+              ],
+              rivalCount: 1,
+              rivalSpawns: [{ x: 7, y: 3 }],
+              blastRange: 1,
+              fuseMs: 900,
+            },
+          }),
+        );
+      },
       state(): unknown {
         const state = run.getState();
         return {
@@ -793,6 +847,7 @@ export function createGameApp(doc: Document): GameApp {
             tile: bomb.tile,
             owner: bomb.owner,
             remote: bomb.remote,
+            piercing: bomb.piercing,
             fuseRemainingTicks: bomb.fuseRemainingTicks,
             from: bomb.from,
             to: bomb.to,
