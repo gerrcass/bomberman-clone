@@ -32,6 +32,11 @@ function bomb(tile: TileCoord, range = 2, id = 1, piercing = false): BombState {
     range,
     remote: false,
     piercing,
+    from: { ...tile },
+    to: { ...tile },
+    progress: 0,
+    moving: false,
+    position: { ...tile },
   };
 }
 
@@ -100,6 +105,25 @@ describe('danger map', () => {
     expect(danger.has('5,2')).toBe(true);
     expect(danger.has('7,2')).toBe(true);
     expect(danger.has('1,2')).toBe(true);
+  });
+
+  it('predicts a sliding bomb at its effective tile', () => {
+    const parsed = parseAsciiArena(OPEN_ROOM);
+    const sliding: BombState = {
+      ...bomb({ x: 4, y: 2 }, 1),
+      from: { x: 3, y: 2 },
+      to: { x: 4, y: 2 },
+      progress: 0.5,
+      moving: true,
+      position: { x: 3.5, y: 2 },
+    };
+
+    const danger = buildDangerMap(parsed.arena, [sliding], []);
+
+    // The cross is built from the effective tile (4,2), not the tile (3,2)
+    // the bomb is sliding out of.
+    expect(danger.has('5,2')).toBe(true);
+    expect(danger.has('2,2')).toBe(false);
   });
 
   it('stops after the first brick', () => {

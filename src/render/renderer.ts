@@ -237,6 +237,15 @@ function drawHighContrastHazards(context: CanvasRenderingContext2D, state: Stage
       TILE_SIZE - 10,
     );
   }
+  for (const bomb of state.bombs) {
+    const inset = TILE_SIZE * 0.18;
+    context.strokeRect(
+      bomb.position.x * TILE_SIZE + inset,
+      bomb.position.y * TILE_SIZE + inset,
+      TILE_SIZE - inset * 2,
+      TILE_SIZE - inset * 2,
+    );
+  }
 }
 
 function drawBombs(
@@ -246,8 +255,9 @@ function drawBombs(
   reducedMotion: boolean,
 ): void {
   for (const bomb of state.bombs) {
-    const centerX = bomb.tile.x * TILE_SIZE + TILE_SIZE / 2;
-    const centerY = bomb.tile.y * TILE_SIZE + TILE_SIZE / 2;
+    // Interpolation is the slide itself, so Reduced Motion never freezes it.
+    const centerX = bomb.position.x * TILE_SIZE + TILE_SIZE / 2;
+    const centerY = bomb.position.y * TILE_SIZE + TILE_SIZE / 2;
     const elapsed = bomb.fuseTicks - bomb.fuseRemainingTicks;
     const pulse = reducedMotion ? 1 : 1 + Math.sin((elapsed + bomb.id * 3) * 0.42) * 0.055;
     const size = TILE_SIZE * pulse;

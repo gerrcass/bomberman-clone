@@ -726,6 +726,7 @@ export function createGameApp(doc: Document): GameApp {
         showGameOver(): void;
         forceRunOver(): void;
         startTechniqueRun(technique?: TechniqueId): void;
+        startKickRun(): void;
         state(): unknown;
       };
     };
@@ -763,6 +764,19 @@ export function createGameApp(doc: Document): GameApp {
           }),
         );
       },
+      startKickRun(): void {
+        // A quiet two-row room makes the slide path and follow-up readable.
+        beginRun(
+          createRun(TITLE_SEED, {
+            firstStage: {
+              arena: ['##############', '#P...........#', '#............#', '##############'],
+              rivalCount: 0,
+              fuseMs: 10000,
+              techniques: { ...INITIAL_TECHNIQUES, kick: 1 },
+            },
+          }),
+        );
+      },
       state(): unknown {
         const state = run.getState();
         return {
@@ -772,6 +786,7 @@ export function createGameApp(doc: Document): GameApp {
           score: state.score,
           techniques: state.stageState.techniques,
           tick: state.stageState.tick,
+          arena: state.stageState.arena,
           player: state.stageState.player,
           bombs: state.stageState.bombs.map((bomb) => ({
             id: bomb.id,
@@ -779,6 +794,11 @@ export function createGameApp(doc: Document): GameApp {
             owner: bomb.owner,
             remote: bomb.remote,
             fuseRemainingTicks: bomb.fuseRemainingTicks,
+            from: bomb.from,
+            to: bomb.to,
+            progress: bomb.progress,
+            moving: bomb.moving,
+            position: bomb.position,
           })),
           blasts: state.stageState.blasts.map((blast) => ({
             tile: blast.tile,

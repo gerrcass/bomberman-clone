@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createRun, stageSeed } from './run';
+import { createRun, type RunOptions, stageSeed } from './run';
 import { INITIAL_TECHNIQUES, OFFERED_TECHNIQUES } from './techniques';
 import { isTechniqueId } from './upgrades';
 
@@ -12,14 +12,15 @@ const CLEARABLE = [
   '#########',
 ] as const;
 
-function clearFirstStage() {
-  const run = createRun(77, {
+function clearFirstStage(seed = 77, firstStage: RunOptions['firstStage'] = {}) {
+  const run = createRun(seed, {
     firstStage: {
       arena: CLEARABLE,
       rivalCount: 1,
       rivalSpawns: [{ x: 3, y: 2 }],
       blastRange: 2,
       fuseMs: 900,
+      ...firstStage,
     },
   });
 
@@ -65,6 +66,19 @@ describe('technique carry-over', () => {
     expect(after.techniques[choice]).toBe(1);
     expect(after.stageState.techniques).toEqual(after.techniques);
     expect(Object.values(after.techniques).reduce((sum, count) => sum + count, 0)).toBe(1);
+  });
+
+  it('offers Bomb Kick and carries it into the next stage', () => {
+    const run = clearFirstStage(9);
+    const state = run.getState();
+
+    expect(state.status).toBe('intermission');
+    expect(state.draft.filter((card) => isTechniqueId(card))).toEqual(['kick']);
+    expect(run.chooseUpgrade('kick')).toBe(true);
+
+    const after = run.getState();
+    expect(after.techniques).toEqual({ kick: 1, remote: 0, pierce: 0 });
+    expect(after.stageState.techniques).toEqual({ kick: 1, remote: 0, pierce: 0 });
   });
 
   it('detonates through the run intent without waiting for the fuse', () => {

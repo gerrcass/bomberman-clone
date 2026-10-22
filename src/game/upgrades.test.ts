@@ -98,7 +98,7 @@ describe('upgrade draft', () => {
     expect(draft).not.toContain('cache');
   });
 
-  it('offers Piercing Blast through the technique slot', () => {
+  it('offers every unowned technique through the technique slot', () => {
     const seen = new Set<TechniqueId>();
 
     for (let seed = 1; seed <= 24; seed += 1) {
@@ -112,8 +112,24 @@ describe('upgrade draft', () => {
       }
     }
 
-    expect(seen).toContain('pierce');
+    expect(seen).toContain('kick');
     expect(seen).toContain('remote');
+    expect(seen).toContain('pierce');
+  });
+
+  it('never offers Bomb Kick once it is owned', () => {
+    for (let seed = 1; seed <= 12; seed += 1) {
+      const draft = draftUpgrades(
+        draftContext({ techniques: { ...INITIAL_TECHNIQUES, kick: 1 } }),
+        createRng(seed),
+      );
+      const techniqueCards = draft.filter((card) => isTechniqueId(card));
+
+      expect(draft).not.toContain('kick');
+      expect(techniqueCards).toHaveLength(1);
+      expect(techniqueCards[0]).not.toBe('kick');
+      expect(OFFERED_TECHNIQUES).toContain(techniqueCards[0]);
+    }
   });
 
   it('excludes an owned technique while another remains eligible', () => {
