@@ -50,6 +50,7 @@ import {
   BASE_MOVE_SPEED,
   BLAST_LIFETIME_TICKS,
   type BlastState,
+  BOMB_KICK_SPEED,
   type BombState,
   BRICK_POINTS,
   type Direction,
@@ -67,6 +68,7 @@ import {
   type StageEvent,
   type StageState,
   type StageStatus,
+  TICK_SECONDS,
   type TileCoord,
   type TileKind,
   ticksToMs,
@@ -132,13 +134,19 @@ export function getStageState(stage: Stage): StageState {
 
 interface MutableBomb {
   readonly id: number;
-  readonly tile: TileCoord;
+  /** Effective tile: the tile being entered while sliding, else the resting tile. */
+  tile: TileCoord;
   readonly owner: string;
   readonly fuseTicks: number;
   fuseRemainingTicks: number;
   readonly range: number;
   readonly placedAtTick: number;
   readonly remote: boolean;
+  from: TileCoord;
+  to: TileCoord;
+  progress: number;
+  moving: boolean;
+  direction: Direction;
 }
 
 interface MutableBlast {
@@ -251,6 +259,7 @@ export function createStage(options: StageOptions): Stage {
         placeBomb(events);
       }
       if (playerAlive) {
+        tryKick(intent.direction ?? null, events);
         tickMovement(movement, intent.direction ?? null, canEnter, {
           onStep: (tile, direction) => {
             events.push({ type: 'player-step', tick, tile, direction });
@@ -267,6 +276,7 @@ export function createStage(options: StageOptions): Stage {
         intent.detonate === true && playerAlive && ownsTechnique(techniques, 'remote');
 
       tickRivals(events);
+      advanceKickedBombs();
       resolveBombs(events, remoteDetonation);
 
       if (playerAlive) {
@@ -653,6 +663,11 @@ export function createStage(options: StageOptions): Stage {
       range: rival.blastRange,
       placedAtTick: tick,
       remote: false,
+      from: { ...target },
+      to: { ...target },
+      progress: 0,
+      moving: false,
+      direction: 'down',
     };
     nextBombId += 1;
     bombs.push(bomb);
@@ -827,6 +842,120 @@ export function createStage(options: StageOptions): Stage {
     return canEnter(x, y);
   }
 
+  /**
+   * Starts a Bomb Kick when the player is at a tile centre and holds a
+   * direction into a resting neighbouring bomb. A slide that has no free
+   * first tile never starts, so the bomb is never nudged into a blocker.
+   */
+  function tryKick(direction: Direction | null, events: StageEvent[]): void {
+    if (direction === null || !ownsTechnique(techniques, 'kick') || isMoving(movement)) {
+      return;
+    }
+
+    const delta = directionDelta(direction);
+    const originX = movement.to.x + delta.x;
+    const originY = movement.to.y + delta.y;
+    const bomb = bombAt(originX, originY);
+    if (bomb === null || bomb.moving) {
+      return;
+    }
+
+    const nextX = originX + delta.x;
+    const nextY = originY + delta.y;
+    if (!canBombSlideInto(bomb, nextX, nextY)) {
+      return;
+    }
+
+    bomb.from = { x: originX, y: originY };
+    bomb.to = { x: nextX, y: nextY };
+    bomb.tile = { x: nextX, y: nextY };
+    bomb.progress = 0;
+    bomb.moving = true;
+    bomb.direction = direction;
+
+    events.push({
+      type: 'bomb-kicked',
+      tick,
+      bombId: bomb.id,
+      owner: bomb.owner,
+      tile: { x: originX, y: originY },
+      direction,
+    });
+  }
+
+  /** A kicked bomb may only enter floor with no other bomb and no bomber. */
+  function canBombSlideInto(bomb: MutableBomb, x: number, y: number): boolean {
+    if (!isWalkable(arena.arena, x, y)) {
+      return false;
+    }
+
+    const other = bombAt(x, y);
+    if (other !== null && other.id !== bomb.id) {
+      return false;
+    }
+
+    return !bomberAt(x, y);
+  }
+
+  /**
+   * True when a live bomber covers the tile. A bomber mid-step occupies both
+   * the tile it is leaving and the tile it is entering for the purpose of a
+   * physical slide, so a bomb never overlaps a body.
+   */
+  function bomberAt(x: number, y: number): boolean {
+    if (playerAlive && movementCovers(movement, x, y)) {
+      return true;
+    }
+    return rivals.some((rival) => rival.alive && movementCovers(rival.movement, x, y));
+  }
+
+  function advanceKickedBombs(): void {
+    for (const bomb of bombs) {
+      if (!bomb.moving) {
+        continue;
+      }
+
+      let remaining = BOMB_KICK_SPEED * TICK_SECONDS;
+      while (true) {
+        const room = 1 - bomb.progress;
+        if (remaining < room) {
+          bomb.progress += remaining;
+          break;
+        }
+
+        // Reach the centre of the tile being entered and immediately claim the
+        // next tile, or rest here when the next tile is blocked.
+        remaining -= room;
+        bomb.from = { ...bomb.to };
+        bomb.progress = 0;
+
+        const delta = directionDelta(bomb.direction);
+        const nextX = bomb.from.x + delta.x;
+        const nextY = bomb.from.y + delta.y;
+        if (!canBombSlideInto(bomb, nextX, nextY)) {
+          bomb.to = { ...bomb.from };
+          bomb.tile = { ...bomb.from };
+          bomb.moving = false;
+          break;
+        }
+
+        bomb.to = { x: nextX, y: nextY };
+        bomb.tile = { x: nextX, y: nextY };
+        if (remaining <= 0) {
+          break;
+        }
+      }
+    }
+  }
+
+  function movementCovers(state: MovementState, x: number, y: number): boolean {
+    if (state.to.x === x && state.to.y === y) {
+      return true;
+    }
+    return isMoving(state) && state.from.x === x && state.from.y === y;
+  }
+
+  /** The effective tile: destination while sliding, resting tile otherwise. */
   function bombAt(x: number, y: number): MutableBomb | null {
     for (const bomb of bombs) {
       if (bomb.tile.x === x && bomb.tile.y === y) {
@@ -859,6 +988,11 @@ export function createStage(options: StageOptions): Stage {
       placedAtTick: tick,
       // Captured at placement: later technique changes never rewrite a live bomb.
       remote: ownsTechnique(techniques, 'remote'),
+      from: { ...target },
+      to: { ...target },
+      progress: 0,
+      moving: false,
+      direction: 'down',
     };
     nextBombId += 1;
     bombs.push(bomb);
@@ -1121,6 +1255,14 @@ function snapshotBomb(bomb: MutableBomb): BombState {
     fuseRemainingMs: ticksToMs(bomb.fuseRemainingTicks),
     range: bomb.range,
     remote: bomb.remote,
+    from: { ...bomb.from },
+    to: { ...bomb.to },
+    progress: bomb.progress,
+    moving: bomb.moving,
+    position: {
+      x: bomb.from.x + (bomb.to.x - bomb.from.x) * bomb.progress,
+      y: bomb.from.y + (bomb.to.y - bomb.from.y) * bomb.progress,
+    },
   };
 }
 

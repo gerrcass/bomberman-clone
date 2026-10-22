@@ -725,6 +725,7 @@ export function createGameApp(doc: Document): GameApp {
         showGameOver(): void;
         forceRunOver(): void;
         startTechniqueRun(): void;
+        startKickRun(): void;
         state(): unknown;
       };
     };
@@ -736,7 +737,7 @@ export function createGameApp(doc: Document): GameApp {
           status: 'intermission',
           lives: 2,
           score: 3450,
-          draft: ['remote', 'bomb', 'fire'],
+          draft: ['kick', 'bomb', 'fire'],
           lastClear: {
             stage: 1,
             basePoints: 1000,
@@ -757,7 +758,20 @@ export function createGameApp(doc: Document): GameApp {
         beginRun(
           createRun(TITLE_SEED, {
             firstStage: {
-              techniques: { ...INITIAL_TECHNIQUES, remote: 1 },
+              techniques: { ...INITIAL_TECHNIQUES, kick: 1, remote: 1 },
+            },
+          }),
+        );
+      },
+      startKickRun(): void {
+        // A quiet two-row room makes the slide path and follow-up readable.
+        beginRun(
+          createRun(TITLE_SEED, {
+            firstStage: {
+              arena: ['##############', '#P...........#', '#............#', '##############'],
+              rivalCount: 0,
+              fuseMs: 10000,
+              techniques: { ...INITIAL_TECHNIQUES, kick: 1 },
             },
           }),
         );
@@ -771,6 +785,7 @@ export function createGameApp(doc: Document): GameApp {
           score: state.score,
           techniques: state.stageState.techniques,
           tick: state.stageState.tick,
+          arena: state.stageState.arena,
           player: state.stageState.player,
           bombs: state.stageState.bombs.map((bomb) => ({
             id: bomb.id,
@@ -778,6 +793,11 @@ export function createGameApp(doc: Document): GameApp {
             owner: bomb.owner,
             remote: bomb.remote,
             fuseRemainingTicks: bomb.fuseRemainingTicks,
+            from: bomb.from,
+            to: bomb.to,
+            progress: bomb.progress,
+            moving: bomb.moving,
+            position: bomb.position,
           })),
           blasts: state.stageState.blasts.map((blast) => blast.tile),
           rivals: state.stageState.rivals.map((rival) => ({

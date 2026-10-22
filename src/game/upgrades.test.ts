@@ -33,6 +33,8 @@ function draftContext(overrides: {
   lives?: number;
   shieldCharges?: number;
   remoteOwned?: boolean;
+  kickOwned?: boolean;
+  techniques?: typeof INITIAL_TECHNIQUES;
 }): {
   counts: UpgradeCounts;
   lives: number;
@@ -43,7 +45,13 @@ function draftContext(overrides: {
     counts: overrides.counts ?? INITIAL_UPGRADES,
     lives: overrides.lives ?? 3,
     shieldCharges: overrides.shieldCharges ?? 0,
-    techniques: overrides.remoteOwned === true ? OWNED_REMOTE : INITIAL_TECHNIQUES,
+    techniques:
+      overrides.techniques ??
+      (overrides.remoteOwned === true
+        ? OWNED_REMOTE
+        : overrides.kickOwned === true
+          ? { ...INITIAL_TECHNIQUES, kick: 1 }
+          : INITIAL_TECHNIQUES),
   };
 }
 
@@ -84,27 +92,60 @@ describe('upgrade draft', () => {
 
     expect(draft).toHaveLength(3);
     expect(new Set(draft).size).toBe(3);
-    expect(draft.filter((card) => isTechniqueId(card))).toEqual(['remote']);
+    expect(draft.filter((card) => isTechniqueId(card))).toHaveLength(1);
+    expect(['kick', 'remote']).toContain(draft.find((card) => isTechniqueId(card)));
     expect(draft.filter((card) => !isTechniqueId(card))).toHaveLength(2);
     expect(draft).not.toContain('cache');
-    expect(draft).not.toContain('kick');
     expect(draft).not.toContain('pierce');
   });
 
   it('offers only techniques that are ready to draft', () => {
     for (let seed = 1; seed <= 12; seed += 1) {
       const draft = draftUpgrades(draftContext({}), createRng(seed));
+      const techniques = draft.filter((card) => isTechniqueId(card));
+
+      expect(techniques).toHaveLength(1);
+      expect(['kick', 'remote']).toContain(techniques[0]);
+      expect(draft).not.toContain('pierce');
+    }
+  });
+
+  it('offers Bomb Kick while it is unowned', () => {
+    const offered = new Set<unknown>();
+    for (let seed = 1; seed <= 12; seed += 1) {
+      const draft = draftUpgrades(draftContext({}), createRng(seed));
+      for (const card of draft) {
+        if (isTechniqueId(card)) {
+          offered.add(card);
+        }
+      }
+    }
+
+    expect(offered).toContain('kick');
+  });
+
+  it('never offers Bomb Kick once it is owned', () => {
+    for (let seed = 1; seed <= 12; seed += 1) {
+      const draft = draftUpgrades(draftContext({ kickOwned: true }), createRng(seed));
+
+      expect(draft).not.toContain('kick');
       expect(draft.filter((card) => isTechniqueId(card))).toEqual(['remote']);
     }
   });
 
   it('excludes owned techniques from the draft and keeps three stat cards', () => {
     for (let seed = 1; seed <= 12; seed += 1) {
-      const draft = draftUpgrades(draftContext({ remoteOwned: true }), createRng(seed));
+      const draft = draftUpgrades(
+        draftContext({
+          techniques: { ...INITIAL_TECHNIQUES, kick: 1, remote: 1 },
+        }),
+        createRng(seed),
+      );
 
       expect(draft).toHaveLength(3);
       expect(new Set(draft).size).toBe(3);
       expect(draft).not.toContain('remote');
+      expect(draft).not.toContain('kick');
       expect(draft.some((card) => isTechniqueId(card))).toBe(false);
     }
   });
@@ -119,7 +160,10 @@ describe('upgrade draft', () => {
       createRng(2),
     );
 
-    expect(draft).toEqual(['remote', 'cache', 'cache']);
+    expect(draft).toHaveLength(3);
+    expect(draft.filter((card) => isTechniqueId(card))).toHaveLength(1);
+    expect(['kick', 'remote']).toContain(draft.find((card) => isTechniqueId(card)));
+    expect(draft.filter((card) => card === 'cache')).toHaveLength(2);
   });
 
   it('fills every slot with Arena Cache when every technique is owned and stats are capped', () => {

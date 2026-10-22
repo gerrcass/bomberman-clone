@@ -141,6 +141,11 @@ export function createAudio(win: Window): AudioController {
         case 'bomb-placed':
           tone(520, 0.08, 'square', 0.08, 380);
           break;
+        case 'bomb-kicked':
+          // A short low thud distinguishes the push from a placement.
+          noise(0.06, 0.11, 650);
+          tone(150, 0.14, 'triangle', 0.14, 65);
+          break;
         case 'bomb-detonated':
           noise(0.32, 0.22, 900);
           tone(90, 0.28, 'sine', 0.18, 45);
