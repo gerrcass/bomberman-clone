@@ -2,10 +2,17 @@ import { createAudio } from '../audio/audio';
 import {
   createRun,
   createStage,
+  INITIAL_TECHNIQUES,
+  isTechniqueId,
+  ownedTechniqueIds,
   type Run,
   type RunState,
   type StageEvent,
   type StageState,
+  type StatUpgradeId,
+  TECHNIQUE_DEFINITIONS,
+  type TechniqueCounts,
+  type TechniqueId,
   UPGRADE_DEFINITIONS,
   type UpgradeId,
 } from '../game';
@@ -60,6 +67,8 @@ export function createGameApp(doc: Document): GameApp {
   const hudSpeed = requireElement<HTMLElement>(doc, '#hud-speed');
   const hudShield = requireElement<HTMLElement>(doc, '#hud-shield');
   const hudRivals = requireElement<HTMLElement>(doc, '#hud-rivals');
+  const hudTechniques = requireElement<HTMLElement>(doc, '#hud-techniques');
+  const hudTechniqueList = requireElement<HTMLElement>(doc, '#hud-technique-list');
   const titleScreen = requireElement<HTMLElement>(doc, '#title-screen');
   const pauseScreen = requireElement<HTMLElement>(doc, '#pause-screen');
   const intermissionScreen = requireElement<HTMLElement>(doc, '#intermission-screen');
@@ -183,7 +192,7 @@ export function createGameApp(doc: Document): GameApp {
     screen = 'howto';
     titleScreen.hidden = true;
     howToScreen.hidden = false;
-    howToBackButton.focus();
+    howToBackButton.focus({ preventScroll: true });
   }
 
   function closeHowTo(): void {
@@ -239,10 +248,48 @@ export function createGameApp(doc: Document): GameApp {
     setText(hudSpeed, String(stage.speedTier));
     setText(hudShield, String(stage.shieldCharges));
     setText(hudRivals, String(stage.rivals.filter((rival) => rival.alive).length));
+    renderTechniqueStrip(stage.techniques);
+  }
+
+  function renderTechniqueStrip(techniques: TechniqueCounts): void {
+    const owned = ownedTechniqueIds(techniques);
+    const signature = owned.join(',');
+    if (hudTechniques.dataset['signature'] === signature) {
+      return;
+    }
+
+    hudTechniques.dataset['signature'] = signature;
+    hudTechniques.hidden = owned.length === 0;
+    hudTechniqueList.replaceChildren();
+
+    for (const id of owned) {
+      const definition = TECHNIQUE_DEFINITIONS[id];
+      const chip = doc.createElement('li');
+      chip.className = 'hud-technique';
+      chip.dataset['technique'] = id;
+
+      const name = doc.createElement('span');
+      name.className = 'hud-technique-name';
+      name.textContent = definition.chip;
+      chip.append(name);
+
+      if (definition.key !== null) {
+        const key = doc.createElement('kbd');
+        key.className = 'hud-technique-key';
+        key.textContent = definition.key;
+        chip.append(key);
+      }
+
+      hudTechniqueList.append(chip);
+    }
   }
 
   function startRun(): void {
-    run = createRun(Date.now() >>> 0);
+    beginRun(createRun(Date.now() >>> 0));
+  }
+
+  function beginRun(nextRun: Run): void {
+    run = nextRun;
     titleStage = createStage({ seed: TITLE_SEED, rivalCount: 0 }).getState();
     runRecorded = false;
     gameoverNewBest.hidden = true;
@@ -325,12 +372,21 @@ export function createGameApp(doc: Document): GameApp {
     upgradeCards.replaceChildren();
 
     for (const [index, id] of state.draft.entries()) {
-      const definition = UPGRADE_DEFINITIONS[id];
+      const technique = isTechniqueId(id);
+      const definition = technique ? TECHNIQUE_DEFINITIONS[id] : UPGRADE_DEFINITIONS[id];
       const card = doc.createElement('button');
       card.type = 'button';
-      card.className = 'upgrade-card';
+      card.className = technique ? 'upgrade-card upgrade-card-technique' : 'upgrade-card';
       card.dataset['upgrade'] = id;
-      card.setAttribute('aria-label', `${index + 1}. ${definition.name}: ${definition.effect}`);
+      if (technique) {
+        card.dataset['kind'] = 'technique';
+      }
+      card.setAttribute(
+        'aria-label',
+        technique
+          ? `${index + 1}. Technique: ${definition.name}. ${definition.effect}. Equip.`
+          : `${index + 1}. ${definition.name}: ${definition.effect}`,
+      );
 
       const key = doc.createElement('span');
       key.className = 'upgrade-key';
@@ -350,9 +406,17 @@ export function createGameApp(doc: Document): GameApp {
 
       const stacks = doc.createElement('span');
       stacks.className = 'upgrade-stacks';
-      stacks.textContent = stackLabel(id, state);
+      stacks.textContent = technique ? 'Equip' : stackLabel(id, state);
 
       card.append(key, name, effect, detail, stacks);
+
+      if (technique) {
+        const kind = doc.createElement('span');
+        kind.className = 'upgrade-kind';
+        kind.textContent = 'Technique';
+        card.append(kind);
+      }
+
       card.addEventListener('click', () => chooseUpgrade(id));
       upgradeCards.append(card);
     }
@@ -360,7 +424,7 @@ export function createGameApp(doc: Document): GameApp {
     upgradeCards.querySelector<HTMLButtonElement>('button')?.focus();
   }
 
-  function stackLabel(id: UpgradeId, state: RunState): string {
+  function stackLabel(id: StatUpgradeId, state: RunState): string {
     const counts = state.upgrades;
     switch (id) {
       case 'bomb':
@@ -462,11 +526,13 @@ export function createGameApp(doc: Document): GameApp {
         const plan = planFixedSteps(accumulator, elapsed);
         accumulator = plan.accumulator;
         let bomb = plan.steps > 0 ? input.consumeBomb() : false;
+        let detonate = plan.steps > 0 ? input.consumeDetonate() : false;
         const events: StageEvent[] = [];
 
         for (let step = 0; step < plan.steps; step += 1) {
-          events.push(...run.step({ direction: input.direction, bomb }));
+          events.push(...run.step({ direction: input.direction, bomb, detonate }));
           bomb = false;
+          detonate = false;
           if (run.getState().status !== 'playing') {
             break;
           }
@@ -661,21 +727,25 @@ export function createGameApp(doc: Document): GameApp {
   if (import.meta.env.DEV) {
     const debugWindow = win as Window & {
       __bombBlitzDebug?: {
-        showIntermission(): void;
+        showIntermission(draft?: readonly UpgradeId[]): void;
         showGameOver(): void;
         forceRunOver(): void;
+        startTechniqueRun(technique?: TechniqueId): void;
+        startKickRun(): void;
+        startPierceRun(): void;
+        startDraftRun(): void;
         state(): unknown;
       };
     };
     debugWindow.__bombBlitzDebug = {
-      showIntermission(): void {
+      showIntermission(draft: readonly UpgradeId[] = ['remote', 'bomb', 'fire']): void {
         const state = run.getState();
         showIntermission({
           ...state,
           status: 'intermission',
           lives: 2,
           score: 3450,
-          draft: ['bomb', 'fire', 'speed'],
+          draft: [...draft],
           lastClear: {
             stage: 1,
             basePoints: 1000,
@@ -692,6 +762,73 @@ export function createGameApp(doc: Document): GameApp {
         }
         showGameOver(run.getState());
       },
+      startTechniqueRun(technique: TechniqueId = 'remote'): void {
+        beginRun(
+          createRun(TITLE_SEED, {
+            initialTechniques: { ...INITIAL_TECHNIQUES, [technique]: 1 },
+          }),
+        );
+      },
+      startKickRun(): void {
+        // A quiet two-row room makes the slide path and follow-up readable.
+        beginRun(
+          createRun(TITLE_SEED, {
+            initialTechniques: { ...INITIAL_TECHNIQUES, kick: 1 },
+            firstStage: {
+              arena: ['##############', '#P...........#', '#............#', '##############'],
+              rivalCount: 0,
+              fuseMs: 10000,
+            },
+          }),
+        );
+      },
+      startPierceRun(): void {
+        // Three bricks in one ray, with a long fuse so the player can clear
+        // the lane and watch the whole line break.
+        beginRun(
+          createRun(TITLE_SEED, {
+            initialTechniques: { ...INITIAL_TECHNIQUES, pierce: 1 },
+            firstStage: {
+              arena: [
+                '#########',
+                '#B......#',
+                '#B......#',
+                '#B......#',
+                '#.......#',
+                '#P......#',
+                '#########',
+              ],
+              rivalCount: 0,
+              blastRange: 4,
+              fuseMs: 2500,
+            },
+          }),
+        );
+      },
+      startDraftRun(): void {
+        // A rival sealed in a one-tile pocket dies to the player's first
+        // bomb, so a real intermission (and its keyboard path) is reachable
+        // without replaying a full stage.
+        beginRun(
+          createRun(TITLE_SEED, {
+            firstStage: {
+              arena: [
+                '#########',
+                '#.......#',
+                '#......##',
+                '#.....PR#',
+                '#......##',
+                '#.......#',
+                '#########',
+              ],
+              rivalCount: 1,
+              rivalSpawns: [{ x: 7, y: 3 }],
+              blastRange: 1,
+              fuseMs: 900,
+            },
+          }),
+        );
+      },
       state(): unknown {
         const state = run.getState();
         return {
@@ -699,7 +836,27 @@ export function createGameApp(doc: Document): GameApp {
           stage: state.stage,
           lives: state.lives,
           score: state.score,
+          techniques: state.stageState.techniques,
+          tick: state.stageState.tick,
+          arena: state.stageState.arena,
           player: state.stageState.player,
+          bombs: state.stageState.bombs.map((bomb) => ({
+            id: bomb.id,
+            tile: bomb.tile,
+            owner: bomb.owner,
+            remote: bomb.remote,
+            piercing: bomb.piercing,
+            fuseRemainingTicks: bomb.fuseRemainingTicks,
+            from: bomb.from,
+            to: bomb.to,
+            progress: bomb.progress,
+            moving: bomb.moving,
+            position: bomb.position,
+          })),
+          blasts: state.stageState.blasts.map((blast) => ({
+            tile: blast.tile,
+            piercing: blast.piercing,
+          })),
           rivals: state.stageState.rivals.map((rival) => ({
             id: rival.id,
             alive: rival.alive,

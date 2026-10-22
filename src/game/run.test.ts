@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { createRun, stageSeed } from './run';
+import { createRun, type RunOptions, stageSeed } from './run';
+import { INITIAL_TECHNIQUES, OFFERED_TECHNIQUES } from './techniques';
+import { isTechniqueId } from './upgrades';
 
 const CLEARABLE = [
   '#########',
@@ -10,15 +12,21 @@ const CLEARABLE = [
   '#########',
 ] as const;
 
-function clearFirstStage() {
-  const run = createRun(77, {
+function clearFirstStage(
+  seed = 77,
+  firstStage: RunOptions['firstStage'] = {},
+  initialTechniques?: RunOptions['initialTechniques'],
+) {
+  const run = createRun(seed, {
     firstStage: {
       arena: CLEARABLE,
       rivalCount: 1,
       rivalSpawns: [{ x: 3, y: 2 }],
       blastRange: 2,
       fuseMs: 900,
+      ...firstStage,
     },
+    ...(initialTechniques === undefined ? {} : { initialTechniques }),
   });
 
   run.step({ bomb: true, direction: 'down' });
@@ -30,6 +38,75 @@ function clearFirstStage() {
   }
   return run;
 }
+
+describe('technique carry-over', () => {
+  it('reserves one technique card in the intermission draft', () => {
+    const run = clearFirstStage();
+    const state = run.getState();
+
+    expect(state.status).toBe('intermission');
+    expect(state.draft).toHaveLength(3);
+    expect(new Set(state.draft).size).toBe(3);
+    const techniqueCards = state.draft.filter((card) => isTechniqueId(card));
+    expect(techniqueCards).toHaveLength(1);
+    expect(OFFERED_TECHNIQUES).toContain(techniqueCards[0]);
+    expect(state.draft.filter((card) => !isTechniqueId(card))).toHaveLength(2);
+  });
+
+  it('adds a chosen technique to the run and the next stage snapshot', () => {
+    const run = clearFirstStage();
+    const choice = run.getState().draft.find((card) => isTechniqueId(card));
+
+    expect(choice).toBeDefined();
+    if (choice === undefined) {
+      return;
+    }
+
+    expect(run.chooseUpgrade(choice)).toBe(true);
+    const after = run.getState();
+
+    expect(after.status).toBe('playing');
+    expect(after.stage).toBe(2);
+    expect(after.draft).toEqual([]);
+    expect(after.techniques[choice]).toBe(1);
+    expect(after.stageState.techniques).toEqual(after.techniques);
+    expect(Object.values(after.techniques).reduce((sum, count) => sum + count, 0)).toBe(1);
+  });
+
+  it('offers Bomb Kick and carries it into the next stage', () => {
+    const run = clearFirstStage(9);
+    const state = run.getState();
+
+    expect(state.status).toBe('intermission');
+    expect(state.draft.filter((card) => isTechniqueId(card))).toEqual(['kick']);
+    expect(run.chooseUpgrade('kick')).toBe(true);
+
+    const after = run.getState();
+    expect(after.techniques).toEqual({ kick: 1, remote: 0, pierce: 0 });
+    expect(after.stageState.techniques).toEqual({ kick: 1, remote: 0, pierce: 0 });
+  });
+
+  it('detonates through the run intent without waiting for the fuse', () => {
+    const run = createRun(77, {
+      initialTechniques: { ...INITIAL_TECHNIQUES, remote: 1 },
+      firstStage: {
+        arena: CLEARABLE,
+        rivalCount: 1,
+        rivalSpawns: [{ x: 3, y: 2 }],
+        blastRange: 2,
+        fuseMs: 900,
+      },
+    });
+
+    const events = run.step({ bomb: true, detonate: true });
+    const after = run.getState();
+
+    expect(after.stageState.techniques.remote).toBe(1);
+    expect(after.stageState.bombs.filter((bomb) => bomb.owner === 'player')).toHaveLength(0);
+    expect(events.some((event) => event.type === 'bomb-placed')).toBe(true);
+    expect(events.some((event) => event.type === 'bomb-detonated')).toBe(true);
+  });
+});
 
 describe('run', () => {
   it('starts with the spec baseline', () => {
@@ -79,6 +156,23 @@ describe('run', () => {
     expect(after.score).toBeGreaterThanOrEqual(before.score);
     expect(after.stageState.score).toBe(after.score);
     expect(after.draft).toEqual([]);
+  });
+
+  it('starts with techniques owned by the run and carries them into later stages', () => {
+    const run = clearFirstStage(77, {}, { ...INITIAL_TECHNIQUES, remote: 1 });
+    const before = run.getState();
+
+    expect(before.techniques.remote).toBe(1);
+    expect(before.stageState.techniques.remote).toBe(1);
+
+    const choice = before.draft[0];
+    expect(choice).toBeDefined();
+    if (choice === undefined) return;
+    expect(run.chooseUpgrade(choice)).toBe(true);
+
+    const after = run.getState();
+    expect(after.techniques.remote).toBe(1);
+    expect(after.stageState.techniques.remote).toBe(1);
   });
 
   it('awards the base and time bonus using the stage clock', () => {

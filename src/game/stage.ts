@@ -41,6 +41,7 @@ import {
   speedForStacks,
 } from './powerups';
 import { createRng } from './rng';
+import { INITIAL_TECHNIQUES, ownsTechnique, type TechniqueCounts } from './techniques';
 import {
   type ArenaState,
   BASE_BLAST_RANGE,
@@ -49,6 +50,7 @@ import {
   BASE_MOVE_SPEED,
   BLAST_LIFETIME_TICKS,
   type BlastState,
+  BOMB_KICK_SPEED,
   type BombState,
   BRICK_POINTS,
   type Direction,
@@ -66,6 +68,7 @@ import {
   type StageEvent,
   type StageState,
   type StageStatus,
+  TICK_SECONDS,
   type TileCoord,
   type TileKind,
   ticksToMs,
@@ -94,6 +97,8 @@ export interface StageOptions {
   readonly initialScore?: number;
   /** Multiplier applied to every point award; defaults to 1. */
   readonly scoreMultiplier?: number;
+  /** Techniques owned for the rest of the run; defaults to none. */
+  readonly techniques?: TechniqueCounts;
   /**
    * Test/fixture override for hidden power-ups. Production stages derive a
    * seeded layout from the arena bricks. A tile without a brick is revealed
@@ -129,18 +134,27 @@ export function getStageState(stage: Stage): StageState {
 
 interface MutableBomb {
   readonly id: number;
-  readonly tile: TileCoord;
+  /** Effective tile: the tile being entered while sliding, else the resting tile. */
+  tile: TileCoord;
   readonly owner: string;
   readonly fuseTicks: number;
   fuseRemainingTicks: number;
   readonly range: number;
   readonly placedAtTick: number;
+  readonly remote: boolean;
+  readonly piercing: boolean;
+  from: TileCoord;
+  to: TileCoord;
+  progress: number;
+  moving: boolean;
+  direction: Direction;
 }
 
 interface MutableBlast {
   readonly tile: TileCoord;
   remainingTicks: number;
   readonly sourceBombId: number;
+  piercing: boolean;
 }
 
 interface MutableRival {
@@ -167,6 +181,7 @@ export function createStage(options: StageOptions): Stage {
   }
 
   const stageNumber = options.stage ?? 1;
+  const techniques = options.techniques ?? INITIAL_TECHNIQUES;
   let bombCapacity = clampStat(options.bombCapacity ?? BASE_BOMB_CAPACITY, 1, MAX_BOMB_CAPACITY);
   let blastRange = clampStat(options.blastRange ?? BASE_BLAST_RANGE, 1, MAX_BLAST_RANGE);
   let speedTier = clampStat(options.speedStacks ?? 0, 0, MAX_SPEED_STACKS);
@@ -246,6 +261,7 @@ export function createStage(options: StageOptions): Stage {
         placeBomb(events);
       }
       if (playerAlive) {
+        tryKick(intent.direction ?? null, events);
         tickMovement(movement, intent.direction ?? null, canEnter, {
           onStep: (tile, direction) => {
             events.push({ type: 'player-step', tick, tile, direction });
@@ -256,8 +272,14 @@ export function createStage(options: StageOptions): Stage {
         });
       }
 
+      // A dead player cannot trigger techniques. Reading this after placement
+      // lets a press detonate a bomb placed in the same tick.
+      const remoteDetonation =
+        intent.detonate === true && playerAlive && ownsTechnique(techniques, 'remote');
+
       tickRivals(events);
-      resolveBombs(events);
+      advanceKickedBombs();
+      resolveBombs(events, remoteDetonation);
 
       if (playerAlive) {
         collectPowerUps(events);
@@ -298,6 +320,7 @@ export function createStage(options: StageOptions): Stage {
         speedTier,
         shieldCharges,
         fuseMs: ticksToMs(fuseTicks),
+        techniques: { ...techniques },
         bombs: bombs.map(snapshotBomb),
         blasts: [...blasts.values()]
           .sort((a, b) => a.tile.y - b.tile.y || a.tile.x - b.tile.x)
@@ -641,6 +664,13 @@ export function createStage(options: StageOptions): Stage {
       fuseRemainingTicks: fuseTicks,
       range: rival.blastRange,
       placedAtTick: tick,
+      remote: false,
+      piercing: false,
+      from: { ...target },
+      to: { ...target },
+      progress: 0,
+      moving: false,
+      direction: 'down',
     };
     nextBombId += 1;
     bombs.push(bomb);
@@ -815,6 +845,120 @@ export function createStage(options: StageOptions): Stage {
     return canEnter(x, y);
   }
 
+  /**
+   * Starts a Bomb Kick when the player is at a tile centre and holds a
+   * direction into a resting neighbouring bomb. A slide that has no free
+   * first tile never starts, so the bomb is never nudged into a blocker.
+   */
+  function tryKick(direction: Direction | null, events: StageEvent[]): void {
+    if (direction === null || !ownsTechnique(techniques, 'kick') || isMoving(movement)) {
+      return;
+    }
+
+    const delta = directionDelta(direction);
+    const originX = movement.to.x + delta.x;
+    const originY = movement.to.y + delta.y;
+    const bomb = bombAt(originX, originY);
+    if (bomb === null || bomb.moving) {
+      return;
+    }
+
+    const nextX = originX + delta.x;
+    const nextY = originY + delta.y;
+    if (!canBombSlideInto(bomb, nextX, nextY)) {
+      return;
+    }
+
+    bomb.from = { x: originX, y: originY };
+    bomb.to = { x: nextX, y: nextY };
+    bomb.tile = { x: nextX, y: nextY };
+    bomb.progress = 0;
+    bomb.moving = true;
+    bomb.direction = direction;
+
+    events.push({
+      type: 'bomb-kicked',
+      tick,
+      bombId: bomb.id,
+      owner: bomb.owner,
+      tile: { x: originX, y: originY },
+      direction,
+    });
+  }
+
+  /** A kicked bomb may only enter floor with no other bomb and no bomber. */
+  function canBombSlideInto(bomb: MutableBomb, x: number, y: number): boolean {
+    if (!isWalkable(arena.arena, x, y)) {
+      return false;
+    }
+
+    const other = bombAt(x, y);
+    if (other !== null && other.id !== bomb.id) {
+      return false;
+    }
+
+    return !bomberAt(x, y);
+  }
+
+  /**
+   * True when a live bomber covers the tile. A bomber mid-step occupies both
+   * the tile it is leaving and the tile it is entering for the purpose of a
+   * physical slide, so a bomb never overlaps a body.
+   */
+  function bomberAt(x: number, y: number): boolean {
+    if (playerAlive && movementCovers(movement, x, y)) {
+      return true;
+    }
+    return rivals.some((rival) => rival.alive && movementCovers(rival.movement, x, y));
+  }
+
+  function advanceKickedBombs(): void {
+    for (const bomb of bombs) {
+      if (!bomb.moving) {
+        continue;
+      }
+
+      let remaining = BOMB_KICK_SPEED * TICK_SECONDS;
+      while (true) {
+        const room = 1 - bomb.progress;
+        if (remaining < room) {
+          bomb.progress += remaining;
+          break;
+        }
+
+        // Reach the centre of the tile being entered and immediately claim the
+        // next tile, or rest here when the next tile is blocked.
+        remaining -= room;
+        bomb.from = { ...bomb.to };
+        bomb.progress = 0;
+
+        const delta = directionDelta(bomb.direction);
+        const nextX = bomb.from.x + delta.x;
+        const nextY = bomb.from.y + delta.y;
+        if (!canBombSlideInto(bomb, nextX, nextY)) {
+          bomb.to = { ...bomb.from };
+          bomb.tile = { ...bomb.from };
+          bomb.moving = false;
+          break;
+        }
+
+        bomb.to = { x: nextX, y: nextY };
+        bomb.tile = { x: nextX, y: nextY };
+        if (remaining <= 0) {
+          break;
+        }
+      }
+    }
+  }
+
+  function movementCovers(state: MovementState, x: number, y: number): boolean {
+    if (state.to.x === x && state.to.y === y) {
+      return true;
+    }
+    return isMoving(state) && state.from.x === x && state.from.y === y;
+  }
+
+  /** The effective tile: destination while sliding, resting tile otherwise. */
   function bombAt(x: number, y: number): MutableBomb | null {
     for (const bomb of bombs) {
       if (bomb.tile.x === x && bomb.tile.y === y) {
@@ -845,6 +989,14 @@ export function createStage(options: StageOptions): Stage {
       fuseRemainingTicks: fuseTicks,
       range: blastRange,
       placedAtTick: tick,
+      // Captured at placement: later technique changes never rewrite a live bomb.
+      remote: ownsTechnique(techniques, 'remote'),
+      piercing: ownsTechnique(techniques, 'pierce'),
+      from: { ...target },
+      to: { ...target },
+      progress: 0,
+      moving: false,
+      direction: 'down',
     };
     nextBombId += 1;
     bombs.push(bomb);
@@ -862,12 +1014,27 @@ export function createStage(options: StageOptions): Stage {
 
   /**
    * Ages every existing fuse, then resolves all detonations for this tick.
-   * Bombs whose fuses expire seed a FIFO queue; bombs reached by a blast join
-   * the same queue, so chain reactions resolve before the tick ends.
+   * Bombs whose fuses expire seed a FIFO queue; a Remote Detonation press
+   * seeds every live bomb the player owns, including one placed this tick.
+   * Bombs reached by a blast join the same queue, so chains resolve before
+   * the tick ends exactly as they do for a fuse detonation.
    */
-  function resolveBombs(events: StageEvent[]): void {
+  function resolveBombs(events: StageEvent[], remoteDetonation: boolean): void {
     const due: MutableBomb[] = [];
+    const blastCaused: MutableBomb[] = [];
+    let remoteQueued = 0;
     for (const bomb of bombs) {
+      // A kicked bomb that slides into a live blast is caught by it, exactly
+      // like a resting bomb reached by a fresh blast ray.
+      if (bomb.moving && blastAt(bomb.tile.x, bomb.tile.y)) {
+        blastCaused.push(bomb);
+        continue;
+      }
+      if (remoteDetonation && bomb.remote) {
+        due.push(bomb);
+        remoteQueued += 1;
+        continue;
+      }
       if (bomb.placedAtTick === tick) {
         continue;
       }
@@ -876,14 +1043,17 @@ export function createStage(options: StageOptions): Stage {
         due.push(bomb);
       }
     }
-    if (due.length === 0) {
+    if (due.length === 0 && blastCaused.length === 0) {
       return;
+    }
+    if (remoteQueued > 0) {
+      events.push({ type: 'remote-triggered', tick, bombs: remoteQueued });
     }
 
     due.sort((a, b) => a.id - b.id);
     const dueIds = new Set(due.map((bomb) => bomb.id));
-    const queue = [...due];
-    const queuedIds = new Set(dueIds);
+    const queue = [...due, ...blastCaused];
+    const queuedIds = new Set(queue.map((bomb) => bomb.id));
     const detonatedIds = new Set<number>();
 
     while (queue.length > 0) {
@@ -905,7 +1075,7 @@ export function createStage(options: StageOptions): Stage {
       });
 
       const blastTiles: TileCoord[] = [];
-      addBlastTile(blastTiles, bomb.id, bomb.tile.x, bomb.tile.y);
+      addBlastTile(blastTiles, bomb.id, bomb.tile.x, bomb.tile.y, bomb.piercing);
 
       for (const direction of BLAST_DIRECTIONS) {
         const delta = directionDelta(direction);
@@ -918,10 +1088,15 @@ export function createStage(options: StageOptions): Stage {
             break;
           }
 
-          addBlastTile(blastTiles, bomb.id, x, y);
+          addBlastTile(blastTiles, bomb.id, x, y, bomb.piercing);
 
           if (kind === 'brick') {
             destroyBrick(x, y, events);
+            // A piercing ray keeps travelling for its full range, so every
+            // brick in the line is destroyed in the same detonation.
+            if (bomb.piercing) {
+              continue;
+            }
             break;
           }
 
@@ -944,7 +1119,13 @@ export function createStage(options: StageOptions): Stage {
     }
   }
 
-  function addBlastTile(blastTiles: TileCoord[], sourceBombId: number, x: number, y: number): void {
+  function addBlastTile(
+    blastTiles: TileCoord[],
+    sourceBombId: number,
+    x: number,
+    y: number,
+    piercing: boolean,
+  ): void {
     blastTiles.push({ x, y });
     const key = tileKey(x, y);
     const existing = blasts.get(key);
@@ -953,10 +1134,14 @@ export function createStage(options: StageOptions): Stage {
         tile: { x, y },
         remainingTicks: BLAST_LIFETIME_TICKS,
         sourceBombId,
+        piercing,
       });
     } else {
-      // Overlapping blasts share one tile and refresh to a full lifetime.
+      // Overlapping blasts share one tile and refresh to a full lifetime. The
+      // marker survives if any contributor pierces, even when a classic blast
+      // lands on the tile afterwards.
       existing.remainingTicks = Math.max(existing.remainingTicks, BLAST_LIFETIME_TICKS);
+      existing.piercing = existing.piercing || piercing;
     }
   }
 
@@ -1100,6 +1285,16 @@ function snapshotBomb(bomb: MutableBomb): BombState {
     fuseRemainingTicks: bomb.fuseRemainingTicks,
     fuseRemainingMs: ticksToMs(bomb.fuseRemainingTicks),
     range: bomb.range,
+    remote: bomb.remote,
+    piercing: bomb.piercing,
+    from: { ...bomb.from },
+    to: { ...bomb.to },
+    progress: bomb.progress,
+    moving: bomb.moving,
+    position: {
+      x: bomb.from.x + (bomb.to.x - bomb.from.x) * bomb.progress,
+      y: bomb.from.y + (bomb.to.y - bomb.from.y) * bomb.progress,
+    },
   };
 }
 
@@ -1109,6 +1304,7 @@ function snapshotBlast(blast: MutableBlast): BlastState {
     remainingTicks: blast.remainingTicks,
     remainingMs: ticksToMs(blast.remainingTicks),
     sourceBombId: blast.sourceBombId,
+    piercing: blast.piercing,
   };
 }
 

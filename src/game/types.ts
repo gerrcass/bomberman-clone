@@ -1,3 +1,5 @@
+import type { TechniqueCounts } from './techniques';
+
 /** Shared vocabulary for the deterministic simulation. */
 
 export const TICKS_PER_SECOND = 60;
@@ -7,6 +9,13 @@ export const TILE_SIZE = 48;
 
 /** Base player movement speed in tiles per second. */
 export const BASE_MOVE_SPEED = 4.6;
+
+/**
+ * Fixed slide speed for a kicked bomb in tiles per second. The bomb crosses
+ * one tile every eight ticks (7.5 / 60 = 0.125 tiles per tick), fast enough
+ * that the kicker can follow into the tile it left.
+ */
+export const BOMB_KICK_SPEED = 7.5;
 
 export const STARTING_LIVES = 3;
 export const BASE_BOMB_CAPACITY = 1;
@@ -112,6 +121,10 @@ export interface RivalState {
 /** Read-only view of one live bomb. */
 export interface BombState {
   readonly id: number;
+  /**
+   * Effective tile. While sliding this is the tile the bomb is entering; at
+   * rest it equals `from` and `to`.
+   */
   readonly tile: TileCoord;
   /** Bomber that placed it. The player is `PLAYER_BOMBER_ID`. */
   readonly owner: string;
@@ -119,6 +132,19 @@ export interface BombState {
   readonly fuseRemainingTicks: number;
   readonly fuseRemainingMs: number;
   readonly range: number;
+  /** True when the owner may detonate this bomb early (captured at placement). */
+  readonly remote: boolean;
+  /** True when this bomb's rays continue through bricks (captured at placement). */
+  readonly piercing: boolean;
+  /** Tile the slide started from, or the resting tile. */
+  readonly from: TileCoord;
+  /** Tile the slide is entering, or the resting tile. */
+  readonly to: TileCoord;
+  /** Slide completion in [0, 1). Always 0 while at rest. */
+  readonly progress: number;
+  readonly moving: boolean;
+  /** Interpolated position in tile units for rendering. */
+  readonly position: { readonly x: number; readonly y: number };
 }
 
 /** Read-only view of one live blast tile. */
@@ -128,6 +154,8 @@ export interface BlastState {
   readonly remainingMs: number;
   /** Bomb whose blast first covered this tile. */
   readonly sourceBombId: number;
+  /** True when any bomb contributing to this tile pierces bricks. */
+  readonly piercing: boolean;
 }
 
 /** Counters accumulated during one stage. */
@@ -157,6 +185,8 @@ export interface StageState {
   readonly shieldCharges: number;
   /** Fuse duration for newly placed bombs, in milliseconds. */
   readonly fuseMs: number;
+  /** Techniques owned by the player for the rest of the run. */
+  readonly techniques: TechniqueCounts;
   readonly bombs: readonly BombState[];
   readonly blasts: readonly BlastState[];
   readonly powerUps: readonly PowerUpState[];
@@ -168,6 +198,8 @@ export interface StageState {
 export interface Intent {
   readonly direction?: Direction | null;
   readonly bomb?: boolean;
+  /** Edge-triggered: detonate every live bomb the player owns immediately. */
+  readonly detonate?: boolean;
 }
 
 /**
@@ -195,6 +227,21 @@ export type StageEvent =
       readonly owner: string;
       readonly fuseTicks: number;
       readonly range: number;
+    }
+  | {
+      readonly type: 'bomb-kicked';
+      readonly tick: number;
+      readonly bombId: number;
+      readonly owner: string;
+      /** Tile the bomb left when the slide started. */
+      readonly tile: TileCoord;
+      readonly direction: Direction;
+    }
+  | {
+      readonly type: 'remote-triggered';
+      readonly tick: number;
+      /** How many player-owned bombs the press queued for detonation. */
+      readonly bombs: number;
     }
   | {
       readonly type: 'bomb-detonated';

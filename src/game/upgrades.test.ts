@@ -1,12 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { createRng } from './rng';
 import {
+  INITIAL_TECHNIQUES,
+  OFFERED_TECHNIQUES,
+  TECHNIQUE_DEFINITIONS,
+  type TechniqueCounts,
+  type TechniqueId,
+} from './techniques';
+import {
   applyUpgrade,
   blastRangeFor,
   bombCapacityFor,
   draftUpgrades,
   fuseMsFor,
   INITIAL_UPGRADES,
+  isTechniqueId,
   MAX_UPGRADE_STACKS,
   scoreMultiplierFor,
   speedStacksFor,
@@ -21,6 +29,28 @@ function maxedCounts(): UpgradeCounts {
     speed: MAX_UPGRADE_STACKS.speed,
     multiplier: MAX_UPGRADE_STACKS.multiplier,
     fuse: MAX_UPGRADE_STACKS.fuse,
+  };
+}
+
+const OWNED_REMOTE: TechniqueCounts = { ...INITIAL_TECHNIQUES, remote: 1 };
+const OWNED_ALL: TechniqueCounts = { ...INITIAL_TECHNIQUES, kick: 1, remote: 1, pierce: 1 };
+
+function draftContext(overrides: {
+  counts?: UpgradeCounts;
+  lives?: number;
+  shieldCharges?: number;
+  techniques?: TechniqueCounts;
+}): {
+  counts: UpgradeCounts;
+  lives: number;
+  shieldCharges: number;
+  techniques: TechniqueCounts;
+} {
+  return {
+    counts: overrides.counts ?? INITIAL_UPGRADES,
+    lives: overrides.lives ?? 3,
+    shieldCharges: overrides.shieldCharges ?? 0,
+    techniques: overrides.techniques ?? INITIAL_TECHNIQUES,
   };
 }
 
@@ -41,6 +71,7 @@ describe('upgrade definitions and stat helpers', () => {
       'fuse',
       'cache',
     ]);
+    expect(Object.keys(TECHNIQUE_DEFINITIONS)).toEqual(['kick', 'remote', 'pierce']);
   });
 
   it('enforces every upgrade cap and the fuse floor', () => {
@@ -55,39 +86,121 @@ describe('upgrade definitions and stat helpers', () => {
 });
 
 describe('upgrade draft', () => {
-  it('offers three distinct permanent upgrades when the pool is full', () => {
-    const draft = draftUpgrades(
-      { counts: INITIAL_UPGRADES, lives: 3, shieldCharges: 0 },
-      createRng(1),
-    );
+  it('reserves one slot for an unowned technique and fills the rest with stat cards', () => {
+    const draft = draftUpgrades(draftContext({}), createRng(1));
+    const techniqueCards = draft.filter((card) => isTechniqueId(card));
 
     expect(draft).toHaveLength(3);
     expect(new Set(draft).size).toBe(3);
+    expect(techniqueCards).toHaveLength(1);
+    expect(OFFERED_TECHNIQUES).toContain(techniqueCards[0]);
+    expect(draft.filter((card) => !isTechniqueId(card))).toHaveLength(2);
     expect(draft).not.toContain('cache');
   });
 
-  it('fills missing slots with repeatable Arena Cache cards', () => {
+  it('offers every unowned technique through the technique slot', () => {
+    const seen = new Set<TechniqueId>();
+
+    for (let seed = 1; seed <= 24; seed += 1) {
+      const draft = draftUpgrades(draftContext({}), createRng(seed));
+      const techniqueCards = draft.filter((card) => isTechniqueId(card));
+
+      expect(techniqueCards).toHaveLength(1);
+      expect(OFFERED_TECHNIQUES).toContain(techniqueCards[0]);
+      if (techniqueCards[0] !== undefined) {
+        seen.add(techniqueCards[0]);
+      }
+    }
+
+    expect(seen).toContain('kick');
+    expect(seen).toContain('remote');
+    expect(seen).toContain('pierce');
+  });
+
+  it('never offers Bomb Kick once it is owned', () => {
+    for (let seed = 1; seed <= 12; seed += 1) {
+      const draft = draftUpgrades(
+        draftContext({ techniques: { ...INITIAL_TECHNIQUES, kick: 1 } }),
+        createRng(seed),
+      );
+      const techniqueCards = draft.filter((card) => isTechniqueId(card));
+
+      expect(draft).not.toContain('kick');
+      expect(techniqueCards).toHaveLength(1);
+      expect(techniqueCards[0]).not.toBe('kick');
+      expect(OFFERED_TECHNIQUES).toContain(techniqueCards[0]);
+    }
+  });
+
+  it('excludes an owned technique while another remains eligible', () => {
+    for (let seed = 1; seed <= 12; seed += 1) {
+      const draft = draftUpgrades(draftContext({ techniques: OWNED_REMOTE }), createRng(seed));
+      const techniqueCards = draft.filter((card) => isTechniqueId(card));
+
+      expect(draft).toHaveLength(3);
+      expect(draft).not.toContain('remote');
+      expect(techniqueCards).toHaveLength(1);
+      expect(techniqueCards[0]).not.toBe('remote');
+      expect(OFFERED_TECHNIQUES).toContain(techniqueCards[0]);
+    }
+  });
+
+  it('keeps three stat cards when every technique is owned', () => {
+    for (let seed = 1; seed <= 12; seed += 1) {
+      const draft = draftUpgrades(draftContext({ techniques: OWNED_ALL }), createRng(seed));
+
+      expect(draft).toHaveLength(3);
+      expect(new Set(draft).size).toBe(3);
+      expect(draft.some((card) => isTechniqueId(card))).toBe(false);
+    }
+  });
+
+  it('fills a late draft with Arena Cache when a technique is the only card left', () => {
     const draft = draftUpgrades(
-      {
+      draftContext({
         counts: maxedCounts(),
         lives: 5,
         shieldCharges: 2,
-      },
+      }),
       createRng(2),
     );
 
-    expect(draft).toEqual(['cache', 'cache', 'cache']);
+    const technique = draft[0];
+    expect(draft).toHaveLength(3);
+    if (technique === undefined) {
+      return;
+    }
+    expect(isTechniqueId(technique)).toBe(true);
+    expect(OFFERED_TECHNIQUES).toContain(technique);
+    expect(draft.slice(1)).toEqual(['cache', 'cache']);
+  });
+
+  it('fills every slot with Arena Cache when every technique is owned and stats are capped', () => {
+    const context = {
+      counts: maxedCounts(),
+      lives: 5,
+      shieldCharges: 2,
+      techniques: { ...INITIAL_TECHNIQUES, kick: 1, remote: 1, pierce: 1 },
+    };
+
+    expect(draftUpgrades(context, createRng(2))).toEqual(['cache', 'cache', 'cache']);
   });
 
   it('is deterministic for the same seed and context', () => {
-    const context = { counts: INITIAL_UPGRADES, lives: 3, shieldCharges: 0 };
+    const context = draftContext({});
     expect(draftUpgrades(context, createRng(9))).toEqual(draftUpgrades(context, createRng(9)));
   });
 });
 
 describe('applying upgrades', () => {
   it('applies every permanent stat and respects caps', () => {
-    const base = { counts: INITIAL_UPGRADES, lives: 3, shieldCharges: 0, scoreMultiplier: 1 };
+    const base = {
+      counts: INITIAL_UPGRADES,
+      lives: 3,
+      shieldCharges: 0,
+      scoreMultiplier: 1,
+      techniques: INITIAL_TECHNIQUES,
+    };
 
     expect(applyUpgrade('bomb', base).counts.bomb).toBe(1);
     expect(applyUpgrade('fire', base).counts.fire).toBe(1);
@@ -102,6 +215,7 @@ describe('applying upgrades', () => {
       lives: 5,
       shieldCharges: 2,
       scoreMultiplier: 1.5,
+      techniques: INITIAL_TECHNIQUES,
     };
     expect(applyUpgrade('bomb', maxed).counts.bomb).toBe(MAX_UPGRADE_STACKS.bomb);
     expect(applyUpgrade('fire', maxed).counts.fire).toBe(MAX_UPGRADE_STACKS.fire);
@@ -112,6 +226,29 @@ describe('applying upgrades', () => {
     expect(applyUpgrade('shield', maxed).shieldCharges).toBe(2);
   });
 
+  it('grants a technique once and leaves the stat counts alone', () => {
+    const base = {
+      counts: INITIAL_UPGRADES,
+      lives: 3,
+      shieldCharges: 0,
+      scoreMultiplier: 1,
+      techniques: INITIAL_TECHNIQUES,
+    };
+
+    const granted = applyUpgrade('remote', base);
+    expect(granted.techniques.remote).toBe(1);
+    expect(granted.counts).toEqual(INITIAL_UPGRADES);
+
+    const repeated = applyUpgrade('remote', { ...base, techniques: granted.techniques });
+    expect(repeated.techniques.remote).toBe(1);
+
+    const pierced = applyUpgrade('pierce', base);
+    expect(pierced.techniques.pierce).toBe(1);
+    expect(pierced.counts).toEqual(INITIAL_UPGRADES);
+
+    expect(applyUpgrade('bomb', base).techniques).toEqual(INITIAL_TECHNIQUES);
+  });
+
   it('rounds Arena Cache awards through the score multiplier', () => {
     expect(
       applyUpgrade('cache', {
@@ -119,6 +256,7 @@ describe('applying upgrades', () => {
         lives: 3,
         shieldCharges: 0,
         scoreMultiplier: 1,
+        techniques: INITIAL_TECHNIQUES,
       }).scoreGain,
     ).toBe(750);
     expect(
@@ -127,6 +265,7 @@ describe('applying upgrades', () => {
         lives: 3,
         shieldCharges: 0,
         scoreMultiplier: 1.1,
+        techniques: INITIAL_TECHNIQUES,
       }).scoreGain,
     ).toBe(825);
   });

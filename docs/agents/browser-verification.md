@@ -34,6 +34,17 @@ Then call `__bombBlitzDebug.showIntermission()` or `__bombBlitzDebug.showGameOve
 
 Verify the intermission draft has three distinct cards, keyboard selection works with 1–3/Tab/Enter, and the game-over screen shows score, stage, bricks, rivals, pickups, and time.
 
+## Technique checks
+
+Draft a technique in a real run, or render one through the dev harness:
+
+- The intermission marks the card as a technique and shows an Equip state, and the other two cards are stat cards.
+- The HUD technique strip appears once a technique is owned and stays legible at the narrowest window.
+- **Bomb Kick:** kick a bomb down a corridor; it slides and stops at the expected blocker, and you can follow it.
+- **Remote Detonation:** place two bombs, press `X`, and confirm both detonate at once; leave a bomb alone and confirm the fuse still fires.
+- **Piercing Blast:** bomb a brick line; every brick in range breaks and revealed power-ups survive.
+- Reduced Motion leaves sliding bombs readable; High Contrast keeps piercing blasts and technique chips distinct.
+
 ## Presentation checks
 
 - Toggle Reduced Motion and confirm shake and non-essential animation stop.

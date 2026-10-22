@@ -64,6 +64,22 @@ _Avoid_: Pickup, item, bonus
 A power-up charge that absorbs one lethal hit instead of costing a life.
 _Avoid_: Armor, health
 
+**Technique**:
+A run-scoped upgrade that changes how the player's bombs behave rather than improving a stat. Each technique is owned at most once per run.
+_Avoid_: Perk, ability, modifier, item
+
+**Bomb Kick**:
+A technique that lets the player push a resting bomb by walking into it. The bomb slides until terrain, another bomb, or a bomber blocks it.
+_Avoid_: Push, shove, kick
+
+**Remote Detonation**:
+A technique that lets the player detonate their own live bombs before their fuse runs out. The fuse still runs and still detonates the bomb on its own.
+_Avoid_: Detonator, manual bomb, trigger
+
+**Piercing Blast**:
+A technique whose blasts destroy every brick in range instead of stopping at the first.
+_Avoid_: Drill bomb, power blast, strong blast
+
 ### The run
 
 **Run**:

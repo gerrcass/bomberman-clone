@@ -1,8 +1,15 @@
 import { MAX_SHIELD_CHARGES } from './powerups';
 import type { Rng } from './rng';
 import { shuffle } from './rng';
+import {
+  grantTechnique,
+  OFFERED_TECHNIQUES,
+  ownsTechnique,
+  type TechniqueCounts,
+  type TechniqueId,
+} from './techniques';
 
-export type UpgradeId =
+export type StatUpgradeId =
   | 'bomb'
   | 'fire'
   | 'speed'
@@ -12,15 +19,18 @@ export type UpgradeId =
   | 'fuse'
   | 'cache';
 
+/** Every card that can appear in an intermission draft. */
+export type UpgradeId = StatUpgradeId | TechniqueId;
+
 export interface UpgradeDefinition {
-  readonly id: UpgradeId;
+  readonly id: StatUpgradeId;
   readonly name: string;
   readonly effect: string;
   readonly detail: string;
   readonly maxLabel: string;
 }
 
-export const UPGRADE_DEFINITIONS: Readonly<Record<UpgradeId, UpgradeDefinition>> = {
+export const UPGRADE_DEFINITIONS: Readonly<Record<StatUpgradeId, UpgradeDefinition>> = {
   bomb: {
     id: 'bomb',
     name: 'Extra Bomb',
@@ -133,14 +143,16 @@ export interface DraftContext {
   readonly counts: UpgradeCounts;
   readonly lives: number;
   readonly shieldCharges: number;
+  readonly techniques: TechniqueCounts;
 }
 
 /**
- * Builds a deterministic draft of three distinct cards. Arena Cache only
- * enters the pool when fewer than three permanent improvements remain.
+ * Builds a deterministic draft of three distinct cards. At most one slot is
+ * reserved for an unowned technique; the other slots are stat cards. Arena
+ * Cache only enters the pool when fewer than three cards remain.
  */
 export function draftUpgrades(context: DraftContext, rng: Rng): readonly UpgradeId[] {
-  const available: UpgradeId[] = [];
+  const available: StatUpgradeId[] = [];
 
   if (context.counts.bomb < MAX_UPGRADE_STACKS.bomb) available.push('bomb');
   if (context.counts.fire < MAX_UPGRADE_STACKS.fire) available.push('fire');
@@ -150,11 +162,20 @@ export function draftUpgrades(context: DraftContext, rng: Rng): readonly Upgrade
   if (context.counts.multiplier < MAX_UPGRADE_STACKS.multiplier) available.push('multiplier');
   if (context.counts.fuse < MAX_UPGRADE_STACKS.fuse) available.push('fuse');
 
-  const draft = shuffle(rng, available).slice(0, 3);
+  const technique = pickTechnique(context.techniques, rng);
+  const statSlots = technique === null ? 3 : 2;
+  const draft: UpgradeId[] = technique === null ? [] : [technique];
+  draft.push(...shuffle(rng, available).slice(0, statSlots));
+
   while (draft.length < 3) {
     draft.push('cache');
   }
   return draft;
+}
+
+function pickTechnique(techniques: TechniqueCounts, rng: Rng): TechniqueId | null {
+  const unowned = OFFERED_TECHNIQUES.filter((id) => !ownsTechnique(techniques, id));
+  return shuffle(rng, unowned)[0] ?? null;
 }
 
 /** Applies one card. Returns the new counts and the immediate score/life changes. */
@@ -163,6 +184,7 @@ export interface UpgradeResult {
   readonly lives: number;
   readonly shieldCharges: number;
   readonly scoreGain: number;
+  readonly techniques: TechniqueCounts;
 }
 
 export function applyUpgrade(
@@ -172,11 +194,13 @@ export function applyUpgrade(
     lives: number;
     shieldCharges: number;
     scoreMultiplier: number;
+    techniques: TechniqueCounts;
   },
 ): UpgradeResult {
   const counts = { ...context.counts };
   let lives = context.lives;
   let shieldCharges = context.shieldCharges;
+  let techniques = context.techniques;
   let scoreGain = 0;
 
   switch (id) {
@@ -204,7 +228,17 @@ export function applyUpgrade(
     case 'cache':
       scoreGain = Math.round(750 * context.scoreMultiplier);
       break;
+    case 'kick':
+    case 'remote':
+    case 'pierce':
+      techniques = grantTechnique(techniques, id);
+      break;
   }
 
-  return { counts, lives, shieldCharges, scoreGain };
+  return { counts, lives, shieldCharges, scoreGain, techniques };
+}
+
+/** Narrows a draft card to a technique card. */
+export function isTechniqueId(id: UpgradeId): id is TechniqueId {
+  return id === 'kick' || id === 'remote' || id === 'pierce';
 }

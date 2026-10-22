@@ -10,6 +10,8 @@ export interface InputController {
   readonly direction: Direction | null;
   /** True once per Space press, then cleared. */
   consumeBomb(): boolean;
+  /** True once per X press, then cleared. */
+  consumeDetonate(): boolean;
   setGameplayEnabled(enabled: boolean): void;
   clear(): void;
   dispose(): void;
@@ -35,6 +37,7 @@ export function createInput(win: Window, actions: InputActions): InputController
   const held: Direction[] = [];
   let gameplayEnabled = false;
   let bombQueued = false;
+  let detonateQueued = false;
 
   function press(direction: Direction): void {
     const existing = held.indexOf(direction);
@@ -54,6 +57,7 @@ export function createInput(win: Window, actions: InputActions): InputController
   function clear(): void {
     held.length = 0;
     bombQueued = false;
+    detonateQueued = false;
   }
 
   function onKeyDown(event: KeyboardEvent): void {
@@ -90,6 +94,14 @@ export function createInput(win: Window, actions: InputActions): InputController
       if (!event.repeat) {
         bombQueued = true;
       }
+      return;
+    }
+
+    if (key === 'x') {
+      event.preventDefault();
+      if (!event.repeat) {
+        detonateQueued = true;
+      }
     }
   }
 
@@ -122,6 +134,11 @@ export function createInput(win: Window, actions: InputActions): InputController
     consumeBomb(): boolean {
       const queued = bombQueued;
       bombQueued = false;
+      return queued;
+    },
+    consumeDetonate(): boolean {
+      const queued = detonateQueued;
+      detonateQueued = false;
       return queued;
     },
     setGameplayEnabled(enabled: boolean): void {

@@ -51,6 +51,10 @@
             <span class="hud-label">Rivals</span>
             <span id="hud-rivals" class="hud-value">0</span>
           </div>
+          <div id="hud-techniques" class="hud-techniques" hidden>
+            <span class="hud-label">Techniques</span>
+            <ul id="hud-technique-list" class="hud-technique-list"></ul>
+          </div>
         </header>
 
         <div class="stage-frame">
@@ -115,27 +119,27 @@
               <div class="help-grid">
                 <div>
                   <h3>Objective</h3>
-                  <p>Clear every rival from the arena. Stages get harder, but your build carries over.</p>
+                  <p>Clear every rival from the arena; stages get harder, but your build carries over. Blasts and rival contact cost a life, a shield absorbs one, and the run ends when lives run out.</p>
                 </div>
                 <div>
                   <h3>Bombs</h3>
-                  <p>Space drops a bomb. Blasts travel in a cross, stop at walls, destroy the first brick, and chain-detonate other bombs.</p>
+                  <p>Space drops a bomb. Blasts travel in a cross, stop at walls, destroy the first brick (unless the blast is piercing), and chain-detonate other bombs.</p>
                 </div>
                 <div>
                   <h3>Power-ups</h3>
                   <p>Bricks hide extra bombs, fire range, speed, and shields. Walk into one to collect it.</p>
                 </div>
                 <div>
-                  <h3>Lives</h3>
-                  <p>Blasts and rival contact cost a life. A shield absorbs one hit. The run ends when lives run out.</p>
-                </div>
-                <div>
                   <h3>Intermission</h3>
                   <p>After each stage, choose one of three upgrades with 1–3 or Tab + Enter. Upgrades last for the whole run.</p>
                 </div>
                 <div>
+                  <h3>Techniques</h3>
+                  <p>Run-long techniques. <strong>Bomb Kick</strong>: walk into a resting bomb to send it sliding. <strong>Remote Detonation</strong>: press X to trigger your live bombs early. <strong>Piercing Blast</strong>: blasts break every brick in range. Fuses still run.</p>
+                </div>
+                <div>
                   <h3>Controls</h3>
-                  <p>Arrows or WASD move · Space bomb · Esc or P pause · M mute</p>
+                  <p>Arrows or WASD move · Space bomb · X detonate · Esc or P pause · M mute</p>
                 </div>
               </div>
               <button id="howto-back-button" class="button button-primary" type="button">Back</button>

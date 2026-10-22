@@ -1,5 +1,6 @@
 import { createRng } from './rng';
 import { createStage, type Stage, type StageOptions } from './stage';
+import { INITIAL_TECHNIQUES, type TechniqueCounts } from './techniques';
 import type { Intent, StageEvent, StageState, StageStats, TileCoord } from './types';
 import {
   applyUpgrade,
@@ -36,6 +37,8 @@ export interface RunState {
   readonly status: RunStatus;
   readonly stageState: StageState;
   readonly upgrades: UpgradeCounts;
+  /** Techniques owned by the player for the rest of the run. */
+  readonly techniques: TechniqueCounts;
   readonly shieldCharges: number;
   readonly draft: readonly UpgradeId[];
   readonly stats: RunStats;
@@ -50,6 +53,11 @@ export interface RunOptions {
   readonly firstStage?: Partial<
     Pick<StageOptions, 'arena' | 'rivalCount' | 'rivalSpawns' | 'fuseMs' | 'blastRange'>
   >;
+  /**
+   * Techniques the player starts the run with. Test and dev-harness seam; the
+   * run owns technique state, so every stage derives from this.
+   */
+  readonly initialTechniques?: TechniqueCounts;
 }
 
 export interface Run {
@@ -76,6 +84,12 @@ export function createRun(seed: number, options: RunOptions = {}): Run {
   const draftRng = createRng((normalizedSeed ^ 0xa511_e9b3) >>> 0);
   let stageNumber = 1;
   let upgrades: UpgradeCounts = INITIAL_UPGRADES;
+  const startingTechniques = options.initialTechniques ?? INITIAL_TECHNIQUES;
+  let techniques: TechniqueCounts = {
+    kick: startingTechniques.kick > 0 ? 1 : 0,
+    remote: startingTechniques.remote > 0 ? 1 : 0,
+    pierce: startingTechniques.pierce > 0 ? 1 : 0,
+  };
   let lives = STARTING_LIVES;
   let shieldCharges = 0;
   let score = STARTING_SCORE;
@@ -104,7 +118,7 @@ export function createRun(seed: number, options: RunOptions = {}): Run {
       if (stageState.status === 'cleared') {
         score = finishStage(stageState);
         status = 'intermission';
-        draft = draftUpgrades({ counts: upgrades, lives, shieldCharges }, draftRng);
+        draft = draftUpgrades({ counts: upgrades, lives, shieldCharges, techniques }, draftRng);
       } else if (stageState.status === 'gameover') {
         status = 'gameover';
         lives = 0;
@@ -124,8 +138,10 @@ export function createRun(seed: number, options: RunOptions = {}): Run {
         lives,
         shieldCharges,
         scoreMultiplier: scoreMultiplierFor(upgrades),
+        techniques,
       });
       upgrades = result.counts;
+      techniques = result.techniques;
       lives = result.lives;
       shieldCharges = result.shieldCharges;
       score += result.scoreGain;
@@ -164,6 +180,7 @@ export function createRun(seed: number, options: RunOptions = {}): Run {
         status,
         stageState,
         upgrades,
+        techniques,
         shieldCharges,
         draft,
         stats,
@@ -184,6 +201,7 @@ export function createRun(seed: number, options: RunOptions = {}): Run {
       scoreMultiplier: scoreMultiplierFor(upgrades),
       fuseMs: fuseMsFor(upgrades),
       initialScore: score,
+      techniques,
     };
 
     if (number === 1 && options.firstStage !== undefined) {
