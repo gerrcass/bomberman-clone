@@ -30,6 +30,7 @@ function bomb(tile: TileCoord, range = 2, id = 1): BombState {
     fuseRemainingTicks: 30,
     fuseRemainingMs: 500,
     range,
+    remote: false,
   };
 }
 

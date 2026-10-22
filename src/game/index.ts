@@ -5,5 +5,6 @@ export * from './powerups';
 export * from './rng';
 export * from './run';
 export * from './stage';
+export * from './techniques';
 export * from './types';
 export * from './upgrades';

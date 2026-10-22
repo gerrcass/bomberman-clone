@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createRun, stageSeed } from './run';
+import { isTechniqueId } from './upgrades';
 
 const CLEARABLE = [
   '#########',
@@ -30,6 +31,55 @@ function clearFirstStage() {
   }
   return run;
 }
+
+describe('technique carry-over', () => {
+  it('reserves one technique card in the intermission draft', () => {
+    const run = clearFirstStage();
+    const state = run.getState();
+
+    expect(state.status).toBe('intermission');
+    expect(state.draft).toHaveLength(3);
+    expect(new Set(state.draft).size).toBe(3);
+    expect(state.draft.filter((card) => isTechniqueId(card))).toEqual(['remote']);
+    expect(state.draft.filter((card) => !isTechniqueId(card))).toHaveLength(2);
+  });
+
+  it('adds a chosen technique to the run and the next stage snapshot', () => {
+    const run = clearFirstStage();
+    const choice = run.getState().draft.find((card) => isTechniqueId(card));
+
+    expect(choice).toBe('remote');
+    if (choice === undefined) {
+      return;
+    }
+
+    expect(run.chooseUpgrade(choice)).toBe(true);
+    const after = run.getState();
+
+    expect(after.status).toBe('playing');
+    expect(after.stage).toBe(2);
+    expect(after.draft).toEqual([]);
+    expect(after.techniques).toEqual({ kick: 0, remote: 1, pierce: 0 });
+    expect(after.stageState.techniques).toEqual({ kick: 0, remote: 1, pierce: 0 });
+  });
+
+  it('detonates through the run intent without waiting for the fuse', () => {
+    const run = clearFirstStage();
+    const choice = run.getState().draft.find((card) => isTechniqueId(card));
+    if (choice === undefined) {
+      return;
+    }
+    run.chooseUpgrade(choice);
+
+    const events = run.step({ bomb: true, detonate: true });
+    const after = run.getState();
+
+    expect(after.stageState.techniques.remote).toBe(1);
+    expect(after.stageState.bombs.filter((bomb) => bomb.owner === 'player')).toHaveLength(0);
+    expect(events.some((event) => event.type === 'bomb-placed')).toBe(true);
+    expect(events.some((event) => event.type === 'bomb-detonated')).toBe(true);
+  });
+});
 
 describe('run', () => {
   it('starts with the spec baseline', () => {
