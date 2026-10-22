@@ -9,6 +9,8 @@ This repository uses the Matt Pocock engineering skills, installed under `.agent
 - A ticket is ready when every issue in its `blockedBy.nodes` is closed.
 - `to-tickets` publishes vertical slices; `implement-spec` runs the frontier, merges to an integration branch, and closes tickets.
 - Each ticket is implemented test-first and verified against its acceptance criteria before it is closed.
+- A fresh worktree has no `node_modules`; run `npm ci` there before `npm run check`.
+- The `implement-spec` orchestrator keeps its turn open while an implementer runs. A subagent that outlives the turn leaves work unmerged; continue the thread and inspect its worktree before spawning anything new.
 
 ## Skills
 
