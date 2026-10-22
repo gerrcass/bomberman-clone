@@ -65,15 +65,15 @@ a 1.0× score multiplier, and a 2200 ms fuse.
   `max(0, 1500 − 20 × elapsed seconds)`, shows a breakdown, and opens a draft of
   three upgrades. Each intermission offers at most one **Technique** and fills
   the other slots with stat upgrades. Stat upgrades cap at Extra Bomb 8, Fire 8,
-  Speed 5, Shield 2, Extra Life 5, Score Multiplier 5, and Short Fuse 4; when
-  fewer than three stat upgrades remain, Arena Cache (+750 points) fills the
-  draft.
-- **Techniques** are one-per-run upgrades that change how your bombs behave.
-  Bomb Kick sends a resting bomb sliding when you walk into it, stopping at
-  terrain, another bomb, or a bomber. Remote Detonation lets you press X to
-  trigger every live bomb you own; the fuse still runs as a safety. Piercing
-  Blast breaks every brick in range instead of stopping at the first. Rivals
-  keep classic bombs.
+  Speed 5, Shield 2, Extra Life 5, Score Multiplier 5, and Short Fuse 4; Arena
+  Cache (+750 points) takes any stat slot left over (two when a technique is
+  offered, three otherwise).
+- **Techniques** are upgrades that change how your bombs behave; each can be
+  owned once per run. Bomb Kick sends a resting bomb sliding when you walk into
+  it, stopping at terrain, another bomb, or a bomber. Remote Detonation lets you
+  press X to trigger every live bomb you own; the fuse still runs as a safety.
+  Piercing Blast breaks every brick in range instead of stopping at the first.
+  Rivals keep classic bombs.
 - **Scoring:** bricks 10, pickups 25, rival defeats 500, plus stage-clear and
   time bonuses. The multiplier applies to every award.
 

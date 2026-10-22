@@ -20,16 +20,17 @@ The game is split so that parallel work can land without fighting over the same 
 - Bombers move on a grid with smooth interpolation. Walls, bricks, and bombs block entry; bombers pass through each other.
 - A moving rival is treated as occupying `movement.to`. If a live blast appears under that destination, the rival reverses instead of finishing the step.
 - Blast rays stop at walls and after destroying one brick, unless the bomb is piercing; they chain-detonate bombs in the same tick, last 450 ms, and spare revealed power-ups.
-- A run carries lives, score, stage, and upgrades; a stage carries the arena, bombers, bombs, blasts, pickups, AI state, and the player's techniques.
-- Technique effects are captured on the bomb at placement. Kick, Remote Detonation, and Piercing Blast belong to the player; rivals always use classic bombs.
+- A run carries lives, score, stage, upgrades, and techniques; a stage carries the arena, bombers, bombs, blasts, pickups, AI state, and the player's techniques.
+- A bomb captures the techniques that affect it — pierce and remote eligibility — at placement. Kick applies when the player walks into a resting bomb. All techniques belong to the player; rivals always use classic bombs.
 - Presentation preferences (sound, music, screen shake, reduced motion, high contrast) are read from the profile, never stored in the simulation.
 
 ## Gameplay seams
 
 - `src/game/run.ts` owns the endless loop: lives, score, stage advancement, intermission state, and run statistics.
 - `src/game/ai.ts` owns danger maps, escape paths, and rival decisions. Its decisions must use the rival's destination tile (`movement.to`) when a step is in progress.
-- `src/game/upgrades.ts` owns the draft pool, caps, stat derivation, and technique definitions. At most one unowned technique occupies a draft slot.
-- `src/game/stage.ts` owns the kick slide, the remote trigger, and pierce geometry; the shared danger map must mirror all three.
+- `src/game/techniques.ts` owns technique definitions, ownership, and caps. At most one unowned technique occupies a draft slot.
+- `src/game/upgrades.ts` owns the draft pool, stat caps, and stat derivation.
+- `src/game/stage.ts` owns the kick slide, the remote trigger, and pierce geometry; the shared danger map mirrors pierce geometry and sliding bombs.
 - `src/app/profile.ts` owns the versioned localStorage profile and settings; malformed or unavailable storage degrades to defaults.
 
 ## Worktree ownership

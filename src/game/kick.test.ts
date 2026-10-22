@@ -342,6 +342,22 @@ describe('Bomb Kick slide', () => {
     expect(kickEvents.filter((event) => event.type === 'bomb-kicked')).toHaveLength(1);
   });
 
+  it('refuses a kick when the tile beyond the bomb is blocked', () => {
+    const stage = stageFrom(['########', '#P...#.#', '########']);
+    placeAt(stage, { x: 4, y: 1 });
+    walkTo(stage, { x: 3, y: 1 });
+
+    const events = collect(stage, 20, { direction: 'right' }).events;
+    const bomb = getStageState(stage).bombs[0];
+
+    expect(events.some((event) => event.type === 'bomb-kicked')).toBe(false);
+    expect(bomb).toMatchObject({
+      tile: { x: 4, y: 1 },
+      moving: false,
+    });
+    expect(playerTile(stage)).toEqual({ x: 3, y: 1 });
+  });
+
   it('does nothing when Bomb Kick is not owned', () => {
     const stage = stageFrom(ROOM, { techniques: INITIAL_TECHNIQUES });
     placeAt(stage, { x: 3, y: 3 });

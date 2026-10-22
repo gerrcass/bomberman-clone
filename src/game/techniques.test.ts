@@ -107,6 +107,7 @@ describe('Remote Detonation', () => {
       },
     ]);
     expect(placedSameTick.some((event) => event.type === 'blast-started')).toBe(true);
+    expect(placedSameTick).toContainEqual({ type: 'remote-triggered', tick: 1, bombs: 1 });
     expect(getStageState(stage).bombs).toHaveLength(0);
 
     // A second bomb placed after the first press, then both live bombs are
@@ -176,7 +177,7 @@ describe('Remote Detonation', () => {
     expect(expiry.events.some((event) => event.type === 'bomb-detonated')).toBe(true);
   });
 
-  it('resolves a remote detonation with the same events as a fuse detonation', () => {
+  it('resolves the same bomb events as a fuse detonation plus a trigger', () => {
     const remote = remoteStage(ROOM);
     const remoteEvents: StageEvent[] = [...tickStage(remote, { bomb: true })];
     remoteEvents.push(...tickStage(remote, { detonate: true }));
@@ -185,9 +186,21 @@ describe('Remote Detonation', () => {
     const fuseEvents: StageEvent[] = [...tickStage(fused, { bomb: true })];
     fuseEvents.push(...collect(fused, 132).events);
 
-    expect(withoutTick(remoteEvents)).toEqual(withoutTick(fuseEvents));
+    expect(remoteEvents).toContainEqual(
+      expect.objectContaining({ type: 'remote-triggered', bombs: 1 }),
+    );
+    expect(withoutTick(remoteEvents.filter((event) => event.type !== 'remote-triggered'))).toEqual(
+      withoutTick(fuseEvents),
+    );
     expect(new Set(remoteEvents.map((event) => event.type))).toEqual(
-      new Set(['bomb-placed', 'bomb-detonated', 'blast-started', 'player-hit', 'life-lost']),
+      new Set([
+        'bomb-placed',
+        'remote-triggered',
+        'bomb-detonated',
+        'blast-started',
+        'player-hit',
+        'life-lost',
+      ]),
     );
   });
 
@@ -257,6 +270,12 @@ describe('Remote Detonation', () => {
     expect(state.bombs).toHaveLength(2);
     expect(state.blasts).toHaveLength(0);
     expect(events).toEqual([]);
+  });
+
+  it('stays silent when a press has no live bombs', () => {
+    const stage = remoteStage(ROOM);
+
+    expect(tickStage(stage, { detonate: true })).toEqual([]);
   });
 
   it('does nothing while the player is dead', () => {
@@ -391,6 +410,29 @@ describe('Piercing Blast', () => {
     );
     expect(state.blasts.some((blast) => blast.tile.y === 3)).toBe(false);
     expect(state.stats.bricksDestroyed).toBe(0);
+  });
+
+  it('reaches a rival sealed behind a brick line', () => {
+    const stage = pierceStage(
+      ['#########', '#R#.....#', '#B#.....#', '#B#.....#', '#P......#', '#########'],
+      {
+        blastRange: 3,
+        fuseMs: 900,
+        rivalCount: 1,
+        rivalSpawns: [{ x: 1, y: 1 }],
+      },
+    );
+
+    const events: StageEvent[] = [...tickStage(stage, { bomb: true })];
+    events.push(...collect(stage, 70, { direction: 'right' }).events);
+
+    const state = getStageState(stage);
+    expect(state.arena.tiles[1 * state.arena.width + 1]).toBe('floor');
+    expect(state.arena.tiles[2 * state.arena.width + 1]).toBe('floor');
+    expect(events).toContainEqual(
+      expect.objectContaining({ type: 'rival-defeated', rivalId: 'cinder' }),
+    );
+    expect(state.rivals.every((rival) => !rival.alive)).toBe(true);
   });
 
   it('leaves a classic player bomb stopping at the first brick', () => {

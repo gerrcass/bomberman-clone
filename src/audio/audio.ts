@@ -146,6 +146,9 @@ export function createAudio(win: Window): AudioController {
           noise(0.06, 0.11, 650);
           tone(150, 0.14, 'triangle', 0.14, 65);
           break;
+        case 'remote-triggered':
+          tone(880, 0.05, 'square', 0.06, 1240);
+          break;
         case 'bomb-detonated':
           noise(0.32, 0.22, 900);
           tone(90, 0.28, 'sine', 0.18, 45);

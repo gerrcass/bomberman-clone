@@ -51,11 +51,13 @@ export interface RunOptions {
    * the first always use the run's seeded arena.
    */
   readonly firstStage?: Partial<
-    Pick<
-      StageOptions,
-      'arena' | 'rivalCount' | 'rivalSpawns' | 'fuseMs' | 'blastRange' | 'techniques'
-    >
+    Pick<StageOptions, 'arena' | 'rivalCount' | 'rivalSpawns' | 'fuseMs' | 'blastRange'>
   >;
+  /**
+   * Techniques the player starts the run with. Test and dev-harness seam; the
+   * run owns technique state, so every stage derives from this.
+   */
+  readonly initialTechniques?: TechniqueCounts;
 }
 
 export interface Run {
@@ -82,7 +84,12 @@ export function createRun(seed: number, options: RunOptions = {}): Run {
   const draftRng = createRng((normalizedSeed ^ 0xa511_e9b3) >>> 0);
   let stageNumber = 1;
   let upgrades: UpgradeCounts = INITIAL_UPGRADES;
-  let techniques: TechniqueCounts = INITIAL_TECHNIQUES;
+  const startingTechniques = options.initialTechniques ?? INITIAL_TECHNIQUES;
+  let techniques: TechniqueCounts = {
+    kick: startingTechniques.kick > 0 ? 1 : 0,
+    remote: startingTechniques.remote > 0 ? 1 : 0,
+    pierce: startingTechniques.pierce > 0 ? 1 : 0,
+  };
   let lives = STARTING_LIVES;
   let shieldCharges = 0;
   let score = STARTING_SCORE;

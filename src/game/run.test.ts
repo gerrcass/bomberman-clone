@@ -12,7 +12,11 @@ const CLEARABLE = [
   '#########',
 ] as const;
 
-function clearFirstStage(seed = 77, firstStage: RunOptions['firstStage'] = {}) {
+function clearFirstStage(
+  seed = 77,
+  firstStage: RunOptions['firstStage'] = {},
+  initialTechniques?: RunOptions['initialTechniques'],
+) {
   const run = createRun(seed, {
     firstStage: {
       arena: CLEARABLE,
@@ -22,6 +26,7 @@ function clearFirstStage(seed = 77, firstStage: RunOptions['firstStage'] = {}) {
       fuseMs: 900,
       ...firstStage,
     },
+    ...(initialTechniques === undefined ? {} : { initialTechniques }),
   });
 
   run.step({ bomb: true, direction: 'down' });
@@ -83,13 +88,13 @@ describe('technique carry-over', () => {
 
   it('detonates through the run intent without waiting for the fuse', () => {
     const run = createRun(77, {
+      initialTechniques: { ...INITIAL_TECHNIQUES, remote: 1 },
       firstStage: {
         arena: CLEARABLE,
         rivalCount: 1,
         rivalSpawns: [{ x: 3, y: 2 }],
         blastRange: 2,
         fuseMs: 900,
-        techniques: { ...INITIAL_TECHNIQUES, remote: 1 },
       },
     });
 
@@ -151,6 +156,23 @@ describe('run', () => {
     expect(after.score).toBeGreaterThanOrEqual(before.score);
     expect(after.stageState.score).toBe(after.score);
     expect(after.draft).toEqual([]);
+  });
+
+  it('starts with techniques owned by the run and carries them into later stages', () => {
+    const run = clearFirstStage(77, {}, { ...INITIAL_TECHNIQUES, remote: 1 });
+    const before = run.getState();
+
+    expect(before.techniques.remote).toBe(1);
+    expect(before.stageState.techniques.remote).toBe(1);
+
+    const choice = before.draft[0];
+    expect(choice).toBeDefined();
+    if (choice === undefined) return;
+    expect(run.chooseUpgrade(choice)).toBe(true);
+
+    const after = run.getState();
+    expect(after.techniques.remote).toBe(1);
+    expect(after.stageState.techniques.remote).toBe(1);
   });
 
   it('awards the base and time bonus using the stage clock', () => {

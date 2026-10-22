@@ -238,6 +238,12 @@ export type StageEvent =
       readonly direction: Direction;
     }
   | {
+      readonly type: 'remote-triggered';
+      readonly tick: number;
+      /** How many player-owned bombs the press queued for detonation. */
+      readonly bombs: number;
+    }
+  | {
       readonly type: 'bomb-detonated';
       readonly tick: number;
       readonly bombId: number;

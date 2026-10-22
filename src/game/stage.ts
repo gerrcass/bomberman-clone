@@ -1022,6 +1022,7 @@ export function createStage(options: StageOptions): Stage {
   function resolveBombs(events: StageEvent[], remoteDetonation: boolean): void {
     const due: MutableBomb[] = [];
     const blastCaused: MutableBomb[] = [];
+    let remoteQueued = 0;
     for (const bomb of bombs) {
       // A kicked bomb that slides into a live blast is caught by it, exactly
       // like a resting bomb reached by a fresh blast ray.
@@ -1031,6 +1032,7 @@ export function createStage(options: StageOptions): Stage {
       }
       if (remoteDetonation && bomb.remote) {
         due.push(bomb);
+        remoteQueued += 1;
         continue;
       }
       if (bomb.placedAtTick === tick) {
@@ -1043,6 +1045,9 @@ export function createStage(options: StageOptions): Stage {
     }
     if (due.length === 0 && blastCaused.length === 0) {
       return;
+    }
+    if (remoteQueued > 0) {
+      events.push({ type: 'remote-triggered', tick, bombs: remoteQueued });
     }
 
     due.sort((a, b) => a.id - b.id);

@@ -765,9 +765,7 @@ export function createGameApp(doc: Document): GameApp {
       startTechniqueRun(technique: TechniqueId = 'remote'): void {
         beginRun(
           createRun(TITLE_SEED, {
-            firstStage: {
-              techniques: { ...INITIAL_TECHNIQUES, [technique]: 1 },
-            },
+            initialTechniques: { ...INITIAL_TECHNIQUES, [technique]: 1 },
           }),
         );
       },
@@ -775,11 +773,11 @@ export function createGameApp(doc: Document): GameApp {
         // A quiet two-row room makes the slide path and follow-up readable.
         beginRun(
           createRun(TITLE_SEED, {
+            initialTechniques: { ...INITIAL_TECHNIQUES, kick: 1 },
             firstStage: {
               arena: ['##############', '#P...........#', '#............#', '##############'],
               rivalCount: 0,
               fuseMs: 10000,
-              techniques: { ...INITIAL_TECHNIQUES, kick: 1 },
             },
           }),
         );
@@ -789,6 +787,7 @@ export function createGameApp(doc: Document): GameApp {
         // the lane and watch the whole line break.
         beginRun(
           createRun(TITLE_SEED, {
+            initialTechniques: { ...INITIAL_TECHNIQUES, pierce: 1 },
             firstStage: {
               arena: [
                 '#########',
@@ -802,7 +801,6 @@ export function createGameApp(doc: Document): GameApp {
               rivalCount: 0,
               blastRange: 4,
               fuseMs: 2500,
-              techniques: { ...INITIAL_TECHNIQUES, pierce: 1 },
             },
           }),
         );
