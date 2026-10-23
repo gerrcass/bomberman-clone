@@ -892,6 +892,14 @@ kbd {
   text-transform: uppercase;
 }
 
+.title-last-run {
+  margin: -8px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
 .title-actions {
   display: grid;
   gap: 10px;
