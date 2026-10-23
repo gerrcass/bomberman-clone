@@ -304,6 +304,7 @@ describe('profile', () => {
           { ...endless, mode: 'weekly' },
           { ...endless, finishedAt: 'not-a-date' },
           { ...endless, mode: 'daily', dailyDate: '' },
+          { ...endless, mode: 'daily', dailyDate: '23/10/2026' },
           daily,
         ],
       }),

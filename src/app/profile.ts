@@ -162,7 +162,10 @@ export function saveProfile(storage: StorageLike | null, profile: Profile): void
 export function recordRun(profile: Profile, result: RunResult, now: Date): Profile {
   const score = nonNegativeInteger(result.score);
   const stage = nonNegativeInteger(result.stage);
-  const dailyDate = result.mode === 'daily' ? result.dailyDate : null;
+  const dailyDate =
+    result.mode === 'daily' && result.dailyDate !== null && DATE_KEY_PATTERN.test(result.dailyDate)
+      ? result.dailyDate
+      : null;
   const record: RunRecord = {
     finishedAt: now.toISOString(),
     mode: dailyDate === null ? 'endless' : 'daily',
@@ -239,7 +242,7 @@ function parseRunRecord(value: unknown): RunRecord | null {
   }
 
   const dailyDate = record['dailyDate'];
-  if (mode === 'daily' && (typeof dailyDate !== 'string' || dailyDate.length === 0)) {
+  if (mode === 'daily' && (typeof dailyDate !== 'string' || !DATE_KEY_PATTERN.test(dailyDate))) {
     return null;
   }
 
