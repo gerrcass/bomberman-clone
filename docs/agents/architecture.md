@@ -9,7 +9,7 @@ The game is split so that parallel work can land without fighting over the same 
 | `src/game/` | Arena generation, seeded RNG, movement, bombs, blasts, pickups, rival AI, run rules, scoring, upgrades | Game modules only; no DOM, Canvas, or Web Audio |
 | `src/render/` | Sprite generation, Canvas drawing, particles, screen shake | `src/game` types and read-only state |
 | `src/audio/` | Synthesized SFX, music loop, audio unlock | `src/game` event types |
-| `src/app/` | Fixed-timestep loop, keyboard input, screen state, DOM UI, persistence, wiring | Everything |
+| `src/app/` | Fixed-timestep loop, keyboard input, screen state, DOM UI, persistence, daily date/seed, wiring | Everything |
 
 ## Invariants
 
@@ -22,6 +22,9 @@ The game is split so that parallel work can land without fighting over the same 
 - Blast rays stop at walls and after destroying one brick, unless the bomb is piercing; they chain-detonate bombs in the same tick, last 450 ms, and spare revealed power-ups.
 - A run carries lives, score, stage, upgrades, and techniques; a stage carries the arena, bombers, bombs, blasts, pickups, AI state, and the player's techniques.
 - A bomb captures the techniques that affect it — pierce and remote eligibility — at placement. Kick applies when the player walks into a resting bomb. All techniques belong to the player; rivals always use classic bombs.
+- A finished Run records exactly once: Run History is newest-first and capped at 20. A Daily Run also updates the current date's Daily Best; every finished Run updates all-time bests and runs played.
+- A Daily Run seed derives from a pure local-date key. The simulation never receives the Run Mode or the date, only the seed; midnight passing mid-run does not change the captured seed.
+- Profile v2 is authoritative once present. The v1 key is read once for migration and never written; a malformed v2 falls back to defaults.
 - Presentation preferences (sound, music, screen shake, reduced motion, high contrast) are read from the profile, never stored in the simulation.
 
 ## Gameplay seams
@@ -31,7 +34,9 @@ The game is split so that parallel work can land without fighting over the same 
 - `src/game/techniques.ts` owns technique definitions, ownership, and caps. At most one unowned technique occupies a draft slot.
 - `src/game/upgrades.ts` owns the draft pool, stat caps, and stat derivation.
 - `src/game/stage.ts` owns the kick slide, the remote trigger, and pierce geometry; the shared danger map mirrors pierce geometry and sliding bombs.
-- `src/app/profile.ts` owns the versioned localStorage profile and settings; malformed or unavailable storage degrades to defaults.
+- `src/app/profile.ts` owns the v2 localStorage profile, the one-way v1 migration, Run History, Daily Best, settings, and validation; malformed or unavailable storage degrades to defaults.
+- `src/app/daily.ts` owns the local `YYYY-MM-DD` date key and the stable daily seed. It is pure and takes an injected `Date`; the app captures the seed when a Daily Run starts.
+- `src/app/game.ts` owns screen state and the Records, Daily Run, and game-over presentation. It passes a seed to `createRun`; it never pushes mode or date into the simulation.
 
 ## Worktree ownership
 

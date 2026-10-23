@@ -86,6 +86,30 @@ _Avoid_: Drill bomb, power blast, strong blast
 One continuous playthrough from stage 1 until the player's lives are exhausted.
 _Avoid_: Game, session, campaign
 
+**Endless Run**:
+The default Run, seeded from a fresh value and unconnected to the calendar.
+_Avoid_: Normal run, classic run, main mode
+
+**Daily Run**:
+A Run whose seed comes from the player's local calendar date, so the same date gives the same run. The Run rules are unchanged.
+_Avoid_: Daily challenge, daily mode, seeded run
+
+**Daily Best**:
+The highest score recorded for the current local date's Daily Run.
+_Avoid_: Daily high score, daily record
+
+**Run Record**:
+The saved summary of one finished Run: its mode, finish time, score, stage, statistics, and owned techniques.
+_Avoid_: History entry, result, log
+
+**Run History**:
+The newest-first list of Run Records on the Profile, capped at 20.
+_Avoid_: Run log, match history, archive
+
+**Run Mode**:
+Whether a Run is an Endless Run or a Daily Run.
+_Avoid_: Game type, challenge type
+
 **Stage**:
 One arena encounter, cleared by defeating every rival.
 _Avoid_: Round, level, wave
