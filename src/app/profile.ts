@@ -70,6 +70,8 @@ export interface StorageLike {
   setItem(key: string, value: string): void;
 }
 
+const DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
 export interface RunResult {
   readonly mode: RunMode;
   readonly dailyDate: string | null;
@@ -98,14 +100,17 @@ export function loadProfile(storage: StorageLike | null): Profile {
     }
 
     const record = parsed as Record<string, unknown>;
+    if (record['version'] !== undefined && record['version'] !== 2) {
+      return DEFAULT_PROFILE;
+    }
     return {
       version: 2,
       highScore: nonNegativeInteger(record['highScore']),
       bestStage: nonNegativeInteger(record['bestStage']),
       runsPlayed: nonNegativeInteger(record['runsPlayed']),
       settings: parseSettings(record['settings']),
-      history: [],
-      dailyBest: null,
+      history: parseHistory(record['history']),
+      dailyBest: parseDailyBest(record['dailyBest']),
     };
   } catch {
     return DEFAULT_PROFILE;
@@ -197,6 +202,73 @@ export function updateSettings(profile: Profile, patch: Partial<Settings>): Prof
       ...patch,
     },
   };
+}
+
+function parseHistory(value: unknown): readonly RunRecord[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const history: RunRecord[] = [];
+  for (const entry of value) {
+    const record = parseRunRecord(entry);
+    if (record !== null) {
+      history.push(record);
+    }
+    if (history.length === RUN_HISTORY_LIMIT) {
+      break;
+    }
+  }
+  return history;
+}
+
+function parseRunRecord(value: unknown): RunRecord | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  const mode = record['mode'];
+  if (mode !== 'endless' && mode !== 'daily') {
+    return null;
+  }
+
+  const finishedAt = record['finishedAt'];
+  if (typeof finishedAt !== 'string' || Number.isNaN(Date.parse(finishedAt))) {
+    return null;
+  }
+
+  const dailyDate = record['dailyDate'];
+  if (mode === 'daily' && (typeof dailyDate !== 'string' || dailyDate.length === 0)) {
+    return null;
+  }
+
+  return {
+    finishedAt,
+    mode,
+    dailyDate: mode === 'daily' ? (dailyDate as string) : null,
+    score: nonNegativeInteger(record['score']),
+    stage: nonNegativeInteger(record['stage']),
+    bricksDestroyed: nonNegativeInteger(record['bricksDestroyed']),
+    rivalsDefeated: nonNegativeInteger(record['rivalsDefeated']),
+    powerUpsCollected: nonNegativeInteger(record['powerUpsCollected']),
+    elapsedTicks: nonNegativeInteger(record['elapsedTicks']),
+    techniques: normalizeTechniques(record['techniques']),
+  };
+}
+
+function parseDailyBest(value: unknown): DailyBest | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  const date = record['date'];
+  if (typeof date !== 'string' || !DATE_KEY_PATTERN.test(date)) {
+    return null;
+  }
+
+  return { date, score: nonNegativeInteger(record['score']) };
 }
 
 function parseSettings(value: unknown): Settings {

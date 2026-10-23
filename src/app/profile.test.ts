@@ -4,7 +4,9 @@ import {
   LEGACY_PROFILE_KEY,
   loadProfile,
   PROFILE_KEY,
+  type Profile,
   RUN_HISTORY_LIMIT,
+  type RunRecord,
   recordRun,
   type StorageLike,
   saveProfile,
@@ -23,6 +25,22 @@ function result(overrides: Partial<Parameters<typeof recordRun>[1]> = {}) {
     rivalsDefeated: 9,
     powerUpsCollected: 7,
     elapsedTicks: 5432,
+    techniques: [],
+    ...overrides,
+  };
+}
+
+function runRecord(score: number, overrides: Partial<RunRecord> = {}): RunRecord {
+  return {
+    finishedAt: '2026-10-23T12:00:00.000Z',
+    mode: 'endless',
+    dailyDate: null,
+    score,
+    stage: 2,
+    bricksDestroyed: 10,
+    rivalsDefeated: 4,
+    powerUpsCollected: 3,
+    elapsedTicks: 600,
     techniques: [],
     ...overrides,
   };
@@ -250,5 +268,173 @@ describe('profile', () => {
     expect(next.highScore).toBe(900);
     expect(next.bestStage).toBe(4);
     expect(next.runsPlayed).toBe(2);
+  });
+
+  it('round-trips history and the Daily Best', () => {
+    const storage = fakeStorage();
+    const profile: Profile = {
+      ...DEFAULT_PROFILE,
+      highScore: 1200,
+      bestStage: 3,
+      runsPlayed: 1,
+      history: [
+        runRecord(1200, {
+          mode: 'daily',
+          dailyDate: '2026-10-23',
+          techniques: ['kick', 'pierce'],
+        }),
+      ],
+      dailyBest: { date: '2026-10-23', score: 1200 },
+    };
+
+    saveProfile(storage, profile);
+    expect(loadProfile(storage)).toEqual(profile);
+  });
+
+  it('drops invalid history entries individually', () => {
+    const endless = runRecord(100);
+    const daily = runRecord(200, { mode: 'daily', dailyDate: '2026-10-23' });
+    const storage = fakeStorage({
+      [PROFILE_KEY]: JSON.stringify({
+        ...DEFAULT_PROFILE,
+        history: [
+          endless,
+          'nope',
+          null,
+          { ...endless, mode: 'weekly' },
+          { ...endless, finishedAt: 'not-a-date' },
+          { ...endless, mode: 'daily', dailyDate: '' },
+          daily,
+        ],
+      }),
+    });
+
+    expect(loadProfile(storage).history).toEqual([endless, daily]);
+  });
+
+  it('filters unknown techniques and keeps display order', () => {
+    const entry = {
+      ...runRecord(100),
+      techniques: ['pierce', 'bogus', 'kick', 'pierce'],
+    };
+    const storage = fakeStorage({
+      [PROFILE_KEY]: JSON.stringify({
+        ...DEFAULT_PROFILE,
+        history: [entry],
+      }),
+    });
+
+    expect(loadProfile(storage).history[0]?.techniques).toEqual(['kick', 'pierce']);
+  });
+
+  it('caps Run History on load', () => {
+    const history = Array.from({ length: RUN_HISTORY_LIMIT + 1 }, (_, index) => runRecord(index));
+    const storage = fakeStorage({
+      [PROFILE_KEY]: JSON.stringify({ ...DEFAULT_PROFILE, history }),
+    });
+
+    const loaded = loadProfile(storage).history;
+    expect(loaded).toHaveLength(RUN_HISTORY_LIMIT);
+    expect(loaded[0]?.score).toBe(0);
+    expect(loaded.at(-1)?.score).toBe(RUN_HISTORY_LIMIT - 1);
+  });
+
+  it('treats a non-array history as empty', () => {
+    const storage = fakeStorage({
+      [PROFILE_KEY]: JSON.stringify({ ...DEFAULT_PROFILE, history: 'nope' }),
+    });
+    expect(loadProfile(storage).history).toEqual([]);
+  });
+
+  it('clamps invalid loaded numbers to non-negative integers', () => {
+    const storage = fakeStorage({
+      [PROFILE_KEY]: `{
+        "version": 2,
+        "highScore": -5,
+        "bestStage": 2.8,
+        "runsPlayed": 1e999,
+        "history": [{
+          "finishedAt": "2026-10-23T12:00:00.000Z",
+          "mode": "endless",
+          "dailyDate": null,
+          "score": -5,
+          "stage": 2.8,
+          "bricksDestroyed": 1e999,
+          "rivalsDefeated": 3.9,
+          "powerUpsCollected": null,
+          "elapsedTicks": "7",
+          "techniques": []
+        }]
+      }`,
+    });
+    const profile = loadProfile(storage);
+    expect(profile.highScore).toBe(0);
+    expect(profile.bestStage).toBe(2);
+    expect(profile.runsPlayed).toBe(0);
+    expect(profile.history[0]).toMatchObject({
+      score: 0,
+      stage: 2,
+      bricksDestroyed: 0,
+      rivalsDefeated: 3,
+      powerUpsCollected: 0,
+      elapsedTicks: 0,
+    });
+  });
+
+  it('validates the Daily Best', () => {
+    const withBest = (dailyBest: unknown) =>
+      loadProfile(
+        fakeStorage({
+          [PROFILE_KEY]: JSON.stringify({ ...DEFAULT_PROFILE, dailyBest }),
+        }),
+      ).dailyBest;
+
+    expect(withBest({ date: '2026-10-23', score: 500 })).toEqual({
+      date: '2026-10-23',
+      score: 500,
+    });
+    expect(withBest({ date: '2026-10-23', score: -5 })).toEqual({
+      date: '2026-10-23',
+      score: 0,
+    });
+    expect(withBest({ date: '23/10/2026', score: 500 })).toBeNull();
+    expect(withBest({ score: 500 })).toBeNull();
+    expect(withBest('nope')).toBeNull();
+  });
+
+  it('falls back per setting field', () => {
+    const storage = fakeStorage({
+      [PROFILE_KEY]: JSON.stringify({
+        ...DEFAULT_PROFILE,
+        settings: { sound: 'yes', highContrast: true, music: false },
+      }),
+    });
+    const profile = loadProfile(storage);
+
+    expect(profile.settings.sound).toBe(DEFAULT_PROFILE.settings.sound);
+    expect(profile.settings.music).toBe(false);
+    expect(profile.settings.highContrast).toBe(true);
+    expect(profile.settings.screenShake).toBe(DEFAULT_PROFILE.settings.screenShake);
+  });
+
+  it('treats a wrong version under the v2 key as malformed', () => {
+    const storage = fakeStorage({
+      [PROFILE_KEY]: JSON.stringify({ version: 1, highScore: 500 }),
+      [LEGACY_PROFILE_KEY]: JSON.stringify({ highScore: 999 }),
+    });
+    expect(loadProfile(storage)).toEqual(DEFAULT_PROFILE);
+  });
+
+  it('never throws when storage reads or writes fail', () => {
+    const storage: StorageLike = {
+      getItem: () => {
+        throw new Error('blocked');
+      },
+      setItem: () => {
+        throw new Error('quota');
+      },
+    };
+    expect(loadProfile(storage)).toEqual(DEFAULT_PROFILE);
+    expect(() => saveProfile(storage, DEFAULT_PROFILE)).not.toThrow();
   });
 });
