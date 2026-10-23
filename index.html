@@ -75,6 +75,7 @@
             <p id="title-last-run" class="title-last-run">LAST RUN — none yet</p>
             <div class="title-actions">
               <button id="play-button" class="button button-primary" type="button">Play</button>
+              <button id="records-button" class="button" type="button">Records</button>
               <button id="how-to-button" class="button" type="button">How to Play</button>
               <button id="settings-button" class="button" type="button">Settings</button>
             </div>
@@ -212,9 +213,38 @@
                 <button id="retry-button" class="button button-primary" type="button">
                   Retry Run
                 </button>
+                <button id="gameover-records-button" class="button" type="button">Records</button>
                 <button id="title-button" class="button" type="button">Title</button>
               </div>
               <p class="controls-hint"><kbd>Tab</kbd> choose<span class="hint-sep">·</span><kbd>Enter</kbd> confirm</p>
+            </div>
+          </section>
+
+          <section
+            id="records-screen"
+            class="screen records-screen"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="records-title"
+            hidden
+          >
+            <div class="records-panel">
+              <p class="eyebrow">Run history</p>
+              <h2 id="records-title" class="pause-title">Records</h2>
+              <dl class="records-bests">
+                <div><dt>Best score</dt><dd id="records-best-score">000000</dd></div>
+                <div><dt>Best stage</dt><dd id="records-best-stage">0</dd></div>
+                <div><dt id="records-daily-label">Daily best</dt><dd id="records-daily-best">—</dd></div>
+              </dl>
+              <section id="records-scroll" class="records-scroll" aria-label="Run History">
+                <ol id="records-list" class="records-list"></ol>
+                <p id="records-empty" class="records-empty">
+                  Finish a run to create your first record.
+                </p>
+              </section>
+              <button id="records-back-button" class="button button-primary" type="button">
+                Back
+              </button>
             </div>
           </section>
 

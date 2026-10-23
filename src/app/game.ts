@@ -17,11 +17,13 @@ import {
   type UpgradeId,
 } from '../game';
 import { type ArenaRenderer, createArenaRenderer } from '../render/renderer';
+import { dailyDateKey } from './daily';
 import { computeCanvasFit } from './fit';
 import { createInput } from './input';
 import { planFixedSteps } from './loop';
 import {
   loadProfile,
+  type RunRecord,
   recordRun,
   type Settings,
   type StorageLike,
@@ -36,7 +38,8 @@ type ScreenState =
   | 'intermission'
   | 'gameover'
   | 'howto'
-  | 'settings';
+  | 'settings'
+  | 'records';
 
 const TITLE_SEED = 7;
 const STAGE_INTRO_TICKS = 90;
@@ -98,6 +101,21 @@ export function createGameApp(doc: Document): GameApp {
   const settingShake = requireElement<HTMLInputElement>(doc, '#setting-shake');
   const settingReducedMotion = requireElement<HTMLInputElement>(doc, '#setting-reduced-motion');
   const settingHighContrast = requireElement<HTMLInputElement>(doc, '#setting-high-contrast');
+  const recordsScreen = requireElement<HTMLElement>(doc, '#records-screen');
+  const recordsButton = requireElement<HTMLButtonElement>(doc, '#records-button');
+  const gameoverRecordsButton = requireElement<HTMLButtonElement>(doc, '#gameover-records-button');
+  const recordsBackButton = requireElement<HTMLButtonElement>(doc, '#records-back-button');
+  const recordsBestScore = requireElement<HTMLElement>(doc, '#records-best-score');
+  const recordsBestStage = requireElement<HTMLElement>(doc, '#records-best-stage');
+  const recordsDailyLabel = requireElement<HTMLElement>(doc, '#records-daily-label');
+  const recordsDailyBest = requireElement<HTMLElement>(doc, '#records-daily-best');
+  const recordsScroll = requireElement<HTMLElement>(doc, '#records-scroll');
+  // The scroll region is a deliberate tab stop so keyboard users can scroll a
+  // long Run History without pointing at it. Biome's static HTML rule rejects a
+  // literal tabindex on a non-interactive element, so set it here instead.
+  recordsScroll.tabIndex = 0;
+  const recordsList = requireElement<HTMLOListElement>(doc, '#records-list');
+  const recordsEmpty = requireElement<HTMLElement>(doc, '#records-empty');
   const gameoverNewBest = requireElement<HTMLElement>(doc, '#gameover-newbest');
   const playButton = requireElement<HTMLButtonElement>(doc, '#play-button');
   const resumeButton = requireElement<HTMLButtonElement>(doc, '#resume-button');
@@ -119,6 +137,7 @@ export function createGameApp(doc: Document): GameApp {
   let introTicks = 0;
   let runRecorded = false;
   let settingsReturn: 'title' | 'paused' = 'title';
+  let recordsReturn: 'title' | 'gameover' = 'title';
   let quitArmed = false;
   let quitTimer: number | null = null;
 
@@ -136,11 +155,16 @@ export function createGameApp(doc: Document): GameApp {
         closeSettings();
       } else if (screen === 'howto') {
         closeHowTo();
+      } else if (screen === 'records') {
+        closeRecords();
       }
     },
   });
 
   function displayStage(): StageState {
+    if (screen === 'records') {
+      return recordsReturn === 'title' ? titleStage : run.getState().stageState;
+    }
     return screen === 'title' || screen === 'howto' || screen === 'settings'
       ? titleStage
       : run.getState().stageState;
@@ -259,6 +283,122 @@ export function createGameApp(doc: Document): GameApp {
     }
   }
 
+  function openRecords(returnTo: 'title' | 'gameover'): void {
+    if (screen !== returnTo) {
+      return;
+    }
+    recordsReturn = returnTo;
+    screen = 'records';
+    if (returnTo === 'title') {
+      titleScreen.hidden = true;
+    } else {
+      gameoverScreen.hidden = true;
+    }
+    input.setGameplayEnabled(false);
+    renderRecords();
+    recordsScreen.hidden = false;
+    recordsScroll.scrollTop = 0;
+    recordsBackButton.focus({ preventScroll: true });
+  }
+
+  function closeRecords(): void {
+    if (screen !== 'records') {
+      return;
+    }
+    recordsScreen.hidden = true;
+    if (recordsReturn === 'title') {
+      screen = 'title';
+      titleScreen.hidden = false;
+      recordsButton.focus();
+    } else {
+      screen = 'gameover';
+      gameoverScreen.hidden = false;
+      gameoverRecordsButton.focus();
+    }
+  }
+
+  function renderRecords(): void {
+    setText(recordsBestScore, String(profile.highScore).padStart(6, '0'));
+    setText(recordsBestStage, String(profile.bestStage));
+
+    const today = dailyDateKey(new Date());
+    const daily = profile.dailyBest;
+    if (daily !== null && daily.date === today) {
+      setText(recordsDailyLabel, `Daily best · ${daily.date}`);
+      setText(recordsDailyBest, String(daily.score).padStart(6, '0'));
+    } else {
+      setText(recordsDailyLabel, 'Daily best · today');
+      setText(recordsDailyBest, '—');
+    }
+
+    const rows = profile.history.map(buildRecordRow);
+    recordsList.replaceChildren(...rows);
+    recordsList.hidden = rows.length === 0;
+    recordsEmpty.hidden = rows.length > 0;
+  }
+
+  function buildRecordRow(record: RunRecord): HTMLElement {
+    const row = doc.createElement('li');
+    row.className = 'record-row';
+    row.dataset['mode'] = record.mode;
+
+    const head = doc.createElement('div');
+    head.className = 'record-head';
+
+    const badge = doc.createElement('span');
+    badge.className = 'record-badge';
+    badge.textContent = record.mode === 'daily' ? 'Daily' : 'Endless';
+
+    const date = doc.createElement('span');
+    date.className = 'record-date';
+    date.textContent = record.dailyDate ?? dailyDateKey(new Date(record.finishedAt));
+
+    const score = doc.createElement('span');
+    score.className = 'record-score';
+    score.textContent = String(record.score).padStart(6, '0');
+
+    head.append(badge, date, score);
+
+    const stage = doc.createElement('p');
+    stage.className = 'record-stage';
+    stage.textContent = `Stage ${record.stage}`;
+
+    const stats = doc.createElement('dl');
+    stats.className = 'record-stats';
+    const entries: ReadonlyArray<readonly [string, string]> = [
+      ['Bricks', String(record.bricksDestroyed)],
+      ['Rivals', String(record.rivalsDefeated)],
+      ['Pickups', String(record.powerUpsCollected)],
+      ['Time', formatTime(record.elapsedTicks)],
+    ];
+    for (const [label, value] of entries) {
+      const stat = doc.createElement('div');
+      const term = doc.createElement('dt');
+      term.textContent = label;
+      const detail = doc.createElement('dd');
+      detail.textContent = value;
+      stat.append(term, detail);
+      stats.append(stat);
+    }
+
+    row.append(head, stage, stats);
+
+    if (record.techniques.length > 0) {
+      const chips = doc.createElement('ul');
+      chips.className = 'record-techniques';
+      for (const id of record.techniques) {
+        const chip = doc.createElement('li');
+        chip.className = 'record-chip';
+        chip.dataset['technique'] = id;
+        chip.textContent = TECHNIQUE_DEFINITIONS[id].chip;
+        chips.append(chip);
+      }
+      row.append(chips);
+    }
+
+    return row;
+  }
+
   function updateHud(): void {
     const state = run.getState();
     const stage = state.stageState;
@@ -320,6 +460,7 @@ export function createGameApp(doc: Document): GameApp {
     pauseScreen.hidden = true;
     howToScreen.hidden = true;
     settingsScreen.hidden = true;
+    recordsScreen.hidden = true;
     intermissionScreen.hidden = true;
     gameoverScreen.hidden = true;
     hud.hidden = false;
@@ -515,6 +656,7 @@ export function createGameApp(doc: Document): GameApp {
     pauseScreen.hidden = true;
     howToScreen.hidden = true;
     settingsScreen.hidden = true;
+    recordsScreen.hidden = true;
     intermissionScreen.hidden = true;
     gameoverScreen.hidden = true;
     stageIntro.hidden = true;
@@ -706,6 +848,11 @@ export function createGameApp(doc: Document): GameApp {
       closeSettings();
       return;
     }
+    if (event.key === 'Escape' && screen === 'records') {
+      event.preventDefault();
+      closeRecords();
+      return;
+    }
     onIntermissionKeyDown(event);
   }
 
@@ -719,6 +866,9 @@ export function createGameApp(doc: Document): GameApp {
   settingsButton.addEventListener('click', () => openSettings('title'));
   pauseSettingsButton.addEventListener('click', () => openSettings('paused'));
   settingsBackButton.addEventListener('click', closeSettings);
+  recordsButton.addEventListener('click', () => openRecords('title'));
+  gameoverRecordsButton.addEventListener('click', () => openRecords('gameover'));
+  recordsBackButton.addEventListener('click', closeRecords);
   settingSound.addEventListener('change', onSettingChange);
   settingMusic.addEventListener('change', onSettingChange);
   settingShake.addEventListener('change', onSettingChange);
@@ -731,6 +881,7 @@ export function createGameApp(doc: Document): GameApp {
   );
   howToScreen.addEventListener('keydown', (event) => trapDialogFocus(event, howToScreen));
   settingsScreen.addEventListener('keydown', (event) => trapDialogFocus(event, settingsScreen));
+  recordsScreen.addEventListener('keydown', (event) => trapDialogFocus(event, recordsScreen));
   doc.addEventListener('keydown', onGlobalKeyDown);
   doc.addEventListener('click', (event) => {
     const target = event.target;
