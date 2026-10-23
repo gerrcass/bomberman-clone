@@ -1,3 +1,5 @@
+import { TECHNIQUE_ORDER, type TechniqueId } from '../game';
+
 export interface Settings {
   readonly sound: boolean;
   readonly music: boolean;
@@ -6,15 +8,44 @@ export interface Settings {
   readonly highContrast: boolean;
 }
 
+export type RunMode = 'endless' | 'daily';
+
+/** The persisted summary of one finished Run. */
+export interface RunRecord {
+  /** ISO timestamp supplied by the app when the Run finished. */
+  readonly finishedAt: string;
+  readonly mode: RunMode;
+  /** `YYYY-MM-DD` for a Daily Run, null for an Endless Run. */
+  readonly dailyDate: string | null;
+  readonly score: number;
+  readonly stage: number;
+  readonly bricksDestroyed: number;
+  readonly rivalsDefeated: number;
+  readonly powerUpsCollected: number;
+  readonly elapsedTicks: number;
+  /** Owned Techniques in stable display order. */
+  readonly techniques: readonly TechniqueId[];
+}
+
+export interface DailyBest {
+  /** Local date key, `YYYY-MM-DD`. */
+  readonly date: string;
+  readonly score: number;
+}
+
 export interface Profile {
-  readonly version: 1;
+  readonly version: 2;
   readonly highScore: number;
   readonly bestStage: number;
   readonly runsPlayed: number;
   readonly settings: Settings;
+  readonly history: readonly RunRecord[];
+  readonly dailyBest: DailyBest | null;
 }
 
-export const PROFILE_KEY = 'bomb-blitz.profile.v1';
+export const PROFILE_KEY = 'bomb-blitz.profile.v2';
+export const LEGACY_PROFILE_KEY = 'bomb-blitz.profile.v1';
+export const RUN_HISTORY_LIMIT = 20;
 
 export const DEFAULT_SETTINGS: Settings = {
   sound: true,
@@ -25,16 +56,32 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 export const DEFAULT_PROFILE: Profile = {
-  version: 1,
+  version: 2,
   highScore: 0,
   bestStage: 0,
   runsPlayed: 0,
   settings: DEFAULT_SETTINGS,
+  history: [],
+  dailyBest: null,
 };
 
 export interface StorageLike {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
+}
+
+const DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+export interface RunResult {
+  readonly mode: RunMode;
+  readonly dailyDate: string | null;
+  readonly score: number;
+  readonly stage: number;
+  readonly bricksDestroyed: number;
+  readonly rivalsDefeated: number;
+  readonly powerUpsCollected: number;
+  readonly elapsedTicks: number;
+  readonly techniques: readonly TechniqueId[];
 }
 
 export function loadProfile(storage: StorageLike | null): Profile {
@@ -45,31 +92,55 @@ export function loadProfile(storage: StorageLike | null): Profile {
   try {
     const raw = storage.getItem(PROFILE_KEY);
     if (raw === null) {
-      return DEFAULT_PROFILE;
+      return loadLegacyProfile(storage);
     }
     const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== 'object' || parsed === null) {
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
       return DEFAULT_PROFILE;
     }
 
     const record = parsed as Record<string, unknown>;
-    const settingsRecord =
-      typeof record['settings'] === 'object' && record['settings'] !== null
-        ? (record['settings'] as Record<string, unknown>)
-        : {};
-
+    if (record['version'] !== undefined && record['version'] !== 2) {
+      return DEFAULT_PROFILE;
+    }
     return {
-      version: 1,
+      version: 2,
       highScore: nonNegativeInteger(record['highScore']),
       bestStage: nonNegativeInteger(record['bestStage']),
       runsPlayed: nonNegativeInteger(record['runsPlayed']),
-      settings: {
-        sound: booleanOr(settingsRecord['sound'], DEFAULT_SETTINGS.sound),
-        music: booleanOr(settingsRecord['music'], DEFAULT_SETTINGS.music),
-        screenShake: booleanOr(settingsRecord['screenShake'], DEFAULT_SETTINGS.screenShake),
-        reducedMotion: booleanOr(settingsRecord['reducedMotion'], DEFAULT_SETTINGS.reducedMotion),
-        highContrast: booleanOr(settingsRecord['highContrast'], DEFAULT_SETTINGS.highContrast),
-      },
+      settings: parseSettings(record['settings']),
+      history: parseHistory(record['history']),
+      dailyBest: parseDailyBest(record['dailyBest']),
+    };
+  } catch {
+    return DEFAULT_PROFILE;
+  }
+}
+
+/**
+ * Reads the v1 key once, when v2 is absent, and maps it into v2. The v1 key is
+ * never written, so a downgrade still finds the old profile intact.
+ */
+function loadLegacyProfile(storage: StorageLike): Profile {
+  try {
+    const raw = storage.getItem(LEGACY_PROFILE_KEY);
+    if (raw === null) {
+      return DEFAULT_PROFILE;
+    }
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      return DEFAULT_PROFILE;
+    }
+
+    const record = parsed as Record<string, unknown>;
+    return {
+      version: 2,
+      highScore: nonNegativeInteger(record['highScore']),
+      bestStage: nonNegativeInteger(record['bestStage']),
+      runsPlayed: nonNegativeInteger(record['runsPlayed']),
+      settings: parseSettings(record['settings']),
+      history: [],
+      dailyBest: null,
     };
   } catch {
     return DEFAULT_PROFILE;
@@ -87,20 +158,42 @@ export function saveProfile(storage: StorageLike | null, profile: Profile): void
   }
 }
 
-export interface RunResult {
-  readonly score: number;
-  readonly stage: number;
-}
-
-/** Records a finished run and returns the updated profile. */
-export function recordRun(profile: Profile, result: RunResult): Profile {
+/** Records a finished Run and returns the updated profile. */
+export function recordRun(profile: Profile, result: RunResult, now: Date): Profile {
   const score = nonNegativeInteger(result.score);
   const stage = nonNegativeInteger(result.stage);
+  const dailyDate =
+    result.mode === 'daily' && result.dailyDate !== null && DATE_KEY_PATTERN.test(result.dailyDate)
+      ? result.dailyDate
+      : null;
+  const record: RunRecord = {
+    finishedAt: now.toISOString(),
+    mode: dailyDate === null ? 'endless' : 'daily',
+    dailyDate,
+    score,
+    stage,
+    bricksDestroyed: nonNegativeInteger(result.bricksDestroyed),
+    rivalsDefeated: nonNegativeInteger(result.rivalsDefeated),
+    powerUpsCollected: nonNegativeInteger(result.powerUpsCollected),
+    elapsedTicks: nonNegativeInteger(result.elapsedTicks),
+    techniques: normalizeTechniques(result.techniques),
+  };
+
+  let dailyBest = profile.dailyBest;
+  if (record.mode === 'daily' && dailyDate !== null) {
+    dailyBest =
+      dailyBest !== null && dailyBest.date === dailyDate
+        ? { date: dailyDate, score: Math.max(dailyBest.score, score) }
+        : { date: dailyDate, score };
+  }
+
   return {
     ...profile,
     highScore: Math.max(profile.highScore, score),
     bestStage: Math.max(profile.bestStage, stage),
     runsPlayed: profile.runsPlayed + 1,
+    history: [record, ...profile.history].slice(0, RUN_HISTORY_LIMIT),
+    dailyBest,
   };
 }
 
@@ -112,6 +205,93 @@ export function updateSettings(profile: Profile, patch: Partial<Settings>): Prof
       ...patch,
     },
   };
+}
+
+function parseHistory(value: unknown): readonly RunRecord[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const history: RunRecord[] = [];
+  for (const entry of value) {
+    const record = parseRunRecord(entry);
+    if (record !== null) {
+      history.push(record);
+    }
+    if (history.length === RUN_HISTORY_LIMIT) {
+      break;
+    }
+  }
+  return history;
+}
+
+function parseRunRecord(value: unknown): RunRecord | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  const mode = record['mode'];
+  if (mode !== 'endless' && mode !== 'daily') {
+    return null;
+  }
+
+  const finishedAt = record['finishedAt'];
+  if (typeof finishedAt !== 'string' || Number.isNaN(Date.parse(finishedAt))) {
+    return null;
+  }
+
+  const dailyDate = record['dailyDate'];
+  if (mode === 'daily' && (typeof dailyDate !== 'string' || !DATE_KEY_PATTERN.test(dailyDate))) {
+    return null;
+  }
+
+  return {
+    finishedAt,
+    mode,
+    dailyDate: mode === 'daily' ? (dailyDate as string) : null,
+    score: nonNegativeInteger(record['score']),
+    stage: nonNegativeInteger(record['stage']),
+    bricksDestroyed: nonNegativeInteger(record['bricksDestroyed']),
+    rivalsDefeated: nonNegativeInteger(record['rivalsDefeated']),
+    powerUpsCollected: nonNegativeInteger(record['powerUpsCollected']),
+    elapsedTicks: nonNegativeInteger(record['elapsedTicks']),
+    techniques: normalizeTechniques(record['techniques']),
+  };
+}
+
+function parseDailyBest(value: unknown): DailyBest | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  const date = record['date'];
+  if (typeof date !== 'string' || !DATE_KEY_PATTERN.test(date)) {
+    return null;
+  }
+
+  return { date, score: nonNegativeInteger(record['score']) };
+}
+
+function parseSettings(value: unknown): Settings {
+  const record =
+    typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+  return {
+    sound: booleanOr(record['sound'], DEFAULT_SETTINGS.sound),
+    music: booleanOr(record['music'], DEFAULT_SETTINGS.music),
+    screenShake: booleanOr(record['screenShake'], DEFAULT_SETTINGS.screenShake),
+    reducedMotion: booleanOr(record['reducedMotion'], DEFAULT_SETTINGS.reducedMotion),
+    highContrast: booleanOr(record['highContrast'], DEFAULT_SETTINGS.highContrast),
+  };
+}
+
+function normalizeTechniques(value: unknown): readonly TechniqueId[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const owned = new Set(value);
+  return TECHNIQUE_ORDER.filter((id) => owned.has(id));
 }
 
 function nonNegativeInteger(value: unknown): number {

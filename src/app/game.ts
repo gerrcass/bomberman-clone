@@ -85,6 +85,7 @@ export function createGameApp(doc: Document): GameApp {
   const gameoverPickups = requireElement<HTMLElement>(doc, '#gameover-pickups');
   const gameoverTime = requireElement<HTMLElement>(doc, '#gameover-time');
   const titleBest = requireElement<HTMLElement>(doc, '#title-best');
+  const titleLastRun = requireElement<HTMLElement>(doc, '#title-last-run');
   const howToScreen = requireElement<HTMLElement>(doc, '#howto-screen');
   const howToButton = requireElement<HTMLButtonElement>(doc, '#how-to-button');
   const howToBackButton = requireElement<HTMLButtonElement>(doc, '#howto-back-button');
@@ -123,7 +124,7 @@ export function createGameApp(doc: Document): GameApp {
 
   applySettings();
   syncSettingsInputs();
-  renderTitleBest();
+  renderTitleProfile();
 
   const input = createInput(win, {
     onPauseToggle: () => {
@@ -160,10 +161,17 @@ export function createGameApp(doc: Document): GameApp {
     settingHighContrast.checked = profile.settings.highContrast;
   }
 
-  function renderTitleBest(): void {
+  function renderTitleProfile(): void {
     setText(
       titleBest,
       `BEST ${String(profile.highScore).padStart(6, '0')} · STAGE ${profile.bestStage}`,
+    );
+    const last = profile.history[0];
+    setText(
+      titleLastRun,
+      last === undefined
+        ? 'LAST RUN — none yet'
+        : `LAST RUN ${String(last.score).padStart(6, '0')} · STAGE ${last.stage}`,
     );
   }
 
@@ -179,9 +187,23 @@ export function createGameApp(doc: Document): GameApp {
     }
     runRecorded = true;
     const previousBest = profile.highScore;
-    profile = recordRun(profile, { score: state.score, stage: state.stage });
+    profile = recordRun(
+      profile,
+      {
+        mode: 'endless',
+        dailyDate: null,
+        score: state.score,
+        stage: state.stage,
+        bricksDestroyed: state.stats.bricksDestroyed,
+        rivalsDefeated: state.stats.rivalsDefeated,
+        powerUpsCollected: state.stats.powerUpsCollected,
+        elapsedTicks: state.stats.elapsedTicks,
+        techniques: ownedTechniqueIds(state.techniques),
+      },
+      new Date(),
+    );
     saveProfile(storage, profile);
-    renderTitleBest();
+    renderTitleProfile();
     return state.score > previousBest;
   }
 
@@ -500,7 +522,7 @@ export function createGameApp(doc: Document): GameApp {
     titleScreen.hidden = false;
     input.setGameplayEnabled(false);
     accumulator = 0;
-    renderTitleBest();
+    renderTitleProfile();
     playButton.focus();
   }
 
