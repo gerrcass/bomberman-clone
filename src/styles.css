@@ -1192,6 +1192,7 @@ html[data-high-contrast="true"] .hud-technique-key {
 /* Records -------------------------------------------------------------- */
 
 .records-screen {
+  grid-template-columns: minmax(0, 1fr);
   background: rgba(3, 6, 11, 0.86);
 }
 
