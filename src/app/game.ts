@@ -17,12 +17,13 @@ import {
   type UpgradeId,
 } from '../game';
 import { type ArenaRenderer, createArenaRenderer } from '../render/renderer';
-import { dailyDateKey } from './daily';
+import { dailyDateKey, dailySeed } from './daily';
 import { computeCanvasFit } from './fit';
 import { createInput } from './input';
 import { planFixedSteps } from './loop';
 import {
   loadProfile,
+  type RunMode,
   type RunRecord,
   recordRun,
   type Settings,
@@ -46,6 +47,11 @@ const STAGE_INTRO_TICKS = 90;
 
 export interface GameApp {
   start(): void;
+}
+
+interface RunRecordOutcome {
+  readonly newBest: boolean;
+  readonly newDailyBest: boolean;
 }
 
 /**
@@ -78,16 +84,23 @@ export function createGameApp(doc: Document): GameApp {
   const intermissionSummary = requireElement<HTMLElement>(doc, '#intermission-summary');
   const upgradeCards = requireElement<HTMLElement>(doc, '#upgrade-cards');
   const stageIntro = requireElement<HTMLElement>(doc, '#stage-intro');
+  const stageIntroMode = requireElement<HTMLElement>(doc, '#stage-intro-mode');
   const stageIntroStage = requireElement<HTMLElement>(doc, '#stage-intro-stage');
   const stageIntroRivals = requireElement<HTMLElement>(doc, '#stage-intro-rivals');
   const gameoverScreen = requireElement<HTMLElement>(doc, '#gameover-screen');
+  const gameoverMode = requireElement<HTMLElement>(doc, '#gameover-mode');
   const gameoverScore = requireElement<HTMLElement>(doc, '#gameover-score');
   const gameoverStage = requireElement<HTMLElement>(doc, '#gameover-stage');
   const gameoverBricks = requireElement<HTMLElement>(doc, '#gameover-bricks');
   const gameoverRivals = requireElement<HTMLElement>(doc, '#gameover-rivals');
   const gameoverPickups = requireElement<HTMLElement>(doc, '#gameover-pickups');
   const gameoverTime = requireElement<HTMLElement>(doc, '#gameover-time');
+  const gameoverDaily = requireElement<HTMLElement>(doc, '#gameover-daily');
+  const gameoverDailyDate = requireElement<HTMLElement>(doc, '#gameover-daily-date');
+  const gameoverDailyBest = requireElement<HTMLElement>(doc, '#gameover-daily-best');
+  const gameoverNewDailyBest = requireElement<HTMLElement>(doc, '#gameover-new-daily-best');
   const titleBest = requireElement<HTMLElement>(doc, '#title-best');
+  const titleDailyBest = requireElement<HTMLElement>(doc, '#title-daily-best');
   const titleLastRun = requireElement<HTMLElement>(doc, '#title-last-run');
   const howToScreen = requireElement<HTMLElement>(doc, '#howto-screen');
   const howToButton = requireElement<HTMLButtonElement>(doc, '#how-to-button');
@@ -118,6 +131,7 @@ export function createGameApp(doc: Document): GameApp {
   const recordsEmpty = requireElement<HTMLElement>(doc, '#records-empty');
   const gameoverNewBest = requireElement<HTMLElement>(doc, '#gameover-newbest');
   const playButton = requireElement<HTMLButtonElement>(doc, '#play-button');
+  const dailyRunButton = requireElement<HTMLButtonElement>(doc, '#daily-run-button');
   const resumeButton = requireElement<HTMLButtonElement>(doc, '#resume-button');
   const quitButton = requireElement<HTMLButtonElement>(doc, '#quit-button');
   const retryButton = requireElement<HTMLButtonElement>(doc, '#retry-button');
@@ -130,6 +144,10 @@ export function createGameApp(doc: Document): GameApp {
   let profile = loadProfile(storage);
   let screen: ScreenState = 'title';
   let run: Run = createRun(TITLE_SEED);
+  let runSeed = TITLE_SEED;
+  let runMode: RunMode = 'endless';
+  let runDailyKey: string | null = null;
+  let runDailySeed: number | null = null;
   let titleStage: StageState = createStage({ seed: TITLE_SEED, rivalCount: 0 }).getState();
   let accumulator = 0;
   let lastFrameTime = 0;
@@ -190,6 +208,14 @@ export function createGameApp(doc: Document): GameApp {
       titleBest,
       `BEST ${String(profile.highScore).padStart(6, '0')} · STAGE ${profile.bestStage}`,
     );
+    const today = dailyDateKey(new Date());
+    const daily = profile.dailyBest;
+    setText(
+      titleDailyBest,
+      daily !== null && daily.date === today
+        ? `DAILY ${today} · BEST ${String(daily.score).padStart(6, '0')}`
+        : `DAILY ${today} · NO RUN YET`,
+    );
     const last = profile.history[0];
     setText(
       titleLastRun,
@@ -205,17 +231,19 @@ export function createGameApp(doc: Document): GameApp {
     applySettings();
   }
 
-  function recordFinishedRun(state: RunState): boolean {
+  function recordFinishedRun(state: RunState): RunRecordOutcome {
     if (runRecorded) {
-      return false;
+      return { newBest: false, newDailyBest: false };
     }
     runRecorded = true;
     const previousBest = profile.highScore;
+    const previousDaily = profile.dailyBest;
+    const dailyDate = runMode === 'daily' ? runDailyKey : null;
     profile = recordRun(
       profile,
       {
-        mode: 'endless',
-        dailyDate: null,
+        mode: dailyDate === null ? 'endless' : 'daily',
+        dailyDate,
         score: state.score,
         stage: state.stage,
         bricksDestroyed: state.stats.bricksDestroyed,
@@ -228,7 +256,13 @@ export function createGameApp(doc: Document): GameApp {
     );
     saveProfile(storage, profile);
     renderTitleProfile();
-    return state.score > previousBest;
+    return {
+      newBest: state.score > previousBest,
+      newDailyBest:
+        dailyDate !== null &&
+        state.score >
+          (previousDaily !== null && previousDaily.date === dailyDate ? previousDaily.score : 0),
+    };
   }
 
   function openHowTo(): void {
@@ -447,14 +481,43 @@ export function createGameApp(doc: Document): GameApp {
   }
 
   function startRun(): void {
-    beginRun(createRun(Date.now() >>> 0));
+    const seed = Date.now() >>> 0;
+    beginRun(createRun(seed), 'endless', null, seed);
   }
 
-  function beginRun(nextRun: Run): void {
+  function startDailyRun(): void {
+    const now = new Date();
+    const key = dailyDateKey(now);
+    const seed = dailySeed(now);
+    beginRun(createRun(seed), 'daily', key, seed);
+  }
+
+  function retryRun(): void {
+    if (runMode === 'daily' && runDailyKey !== null && runDailySeed !== null) {
+      // Retry reuses the captured key and seed, so crossing midnight cannot
+      // swap the challenge while the player is still on the game-over screen.
+      beginRun(createRun(runDailySeed), 'daily', runDailyKey, runDailySeed);
+      return;
+    }
+    startRun();
+  }
+
+  function beginRun(
+    nextRun: Run,
+    mode: RunMode,
+    dailyKey: string | null = null,
+    seed: number = TITLE_SEED,
+  ): void {
     run = nextRun;
+    runSeed = seed;
+    runMode = mode;
+    runDailyKey = mode === 'daily' ? dailyKey : null;
+    runDailySeed = mode === 'daily' ? seed : null;
     titleStage = createStage({ seed: TITLE_SEED, rivalCount: 0 }).getState();
     runRecorded = false;
     gameoverNewBest.hidden = true;
+    gameoverNewDailyBest.hidden = true;
+    gameoverDaily.hidden = true;
     screen = 'playing';
     titleScreen.hidden = true;
     pauseScreen.hidden = true;
@@ -475,6 +538,13 @@ export function createGameApp(doc: Document): GameApp {
   function beginStageIntro(): void {
     const state = run.getState();
     const rivals = state.stageState.rivals.length;
+    if (runMode === 'daily' && runDailyKey !== null) {
+      setText(stageIntroMode, `Daily Run · ${runDailyKey}`);
+      stageIntroMode.hidden = false;
+    } else {
+      setText(stageIntroMode, '');
+      stageIntroMode.hidden = true;
+    }
     setText(stageIntroStage, String(state.stage));
     setText(
       stageIntroRivals,
@@ -623,7 +693,7 @@ export function createGameApp(doc: Document): GameApp {
     canvas.focus({ preventScroll: true });
   }
 
-  function showGameOver(state: RunState): void {
+  function showGameOver(state: RunState, recorded?: RunRecordOutcome): void {
     screen = 'gameover';
     gameoverScreen.hidden = false;
     intermissionScreen.hidden = true;
@@ -637,8 +707,26 @@ export function createGameApp(doc: Document): GameApp {
     setText(gameoverPickups, String(state.stats.powerUpsCollected));
     setText(gameoverTime, formatTime(state.stats.elapsedTicks));
     const isRealGameOver = state.stageState.status === 'gameover';
-    const newBest = isRealGameOver ? recordFinishedRun(state) : false;
-    gameoverNewBest.hidden = !newBest;
+    const outcome: RunRecordOutcome =
+      recorded ??
+      (isRealGameOver ? recordFinishedRun(state) : { newBest: false, newDailyBest: false });
+    const dailyKey = runMode === 'daily' ? runDailyKey : null;
+    setText(gameoverMode, dailyKey === null ? 'Endless Run' : `Daily Run · ${dailyKey}`);
+    if (dailyKey !== null) {
+      const daily = profile.dailyBest;
+      setText(gameoverDailyDate, dailyKey);
+      setText(
+        gameoverDailyBest,
+        daily !== null && daily.date === dailyKey ? String(daily.score).padStart(6, '0') : '—',
+      );
+      gameoverDaily.hidden = false;
+    } else {
+      setText(gameoverDailyDate, '');
+      setText(gameoverDailyBest, '—');
+      gameoverDaily.hidden = true;
+    }
+    gameoverNewBest.hidden = !outcome.newBest;
+    gameoverNewDailyBest.hidden = !outcome.newDailyBest;
     input.setGameplayEnabled(false);
     accumulator = 0;
     retryButton.focus();
@@ -857,9 +945,10 @@ export function createGameApp(doc: Document): GameApp {
   }
 
   playButton.addEventListener('click', startRun);
+  dailyRunButton.addEventListener('click', startDailyRun);
   resumeButton.addEventListener('click', resumeGame);
   quitButton.addEventListener('click', onQuitClick);
-  retryButton.addEventListener('click', startRun);
+  retryButton.addEventListener('click', retryRun);
   titleButton.addEventListener('click', quitToTitle);
   howToButton.addEventListener('click', openHowTo);
   howToBackButton.addEventListener('click', closeHowTo);
@@ -907,6 +996,7 @@ export function createGameApp(doc: Document): GameApp {
         startKickRun(): void;
         startPierceRun(): void;
         startDraftRun(): void;
+        startDailyRunOn(dateKey?: string): void;
         state(): unknown;
       };
     };
@@ -929,17 +1019,21 @@ export function createGameApp(doc: Document): GameApp {
         });
       },
       forceRunOver(): void {
+        let recorded: RunRecordOutcome | undefined;
         if (run.getState().status !== 'gameover') {
           run.quit();
-          recordFinishedRun(run.getState());
+          recorded = recordFinishedRun(run.getState());
         }
-        showGameOver(run.getState());
+        showGameOver(run.getState(), recorded);
       },
       startTechniqueRun(technique: TechniqueId = 'remote'): void {
         beginRun(
           createRun(TITLE_SEED, {
             initialTechniques: { ...INITIAL_TECHNIQUES, [technique]: 1 },
           }),
+          'endless',
+          null,
+          TITLE_SEED,
         );
       },
       startKickRun(): void {
@@ -953,6 +1047,9 @@ export function createGameApp(doc: Document): GameApp {
               fuseMs: 10000,
             },
           }),
+          'endless',
+          null,
+          TITLE_SEED,
         );
       },
       startPierceRun(): void {
@@ -976,6 +1073,9 @@ export function createGameApp(doc: Document): GameApp {
               fuseMs: 2500,
             },
           }),
+          'endless',
+          null,
+          TITLE_SEED,
         );
       },
       startDraftRun(): void {
@@ -1000,12 +1100,27 @@ export function createGameApp(doc: Document): GameApp {
               fuseMs: 900,
             },
           }),
+          'endless',
+          null,
+          TITLE_SEED,
         );
+      },
+      startDailyRunOn(dateKey?: string): void {
+        const key = dateKey ?? dailyDateKey(new Date());
+        const date = parseDailyKey(key);
+        if (date === null) {
+          return;
+        }
+        const seed = dailySeed(date);
+        beginRun(createRun(seed), 'daily', key, seed);
       },
       state(): unknown {
         const state = run.getState();
         return {
           status: state.status,
+          seed: runSeed,
+          mode: runMode,
+          dailyDate: runDailyKey,
           stage: state.stage,
           lives: state.lives,
           score: state.score,
@@ -1076,6 +1191,17 @@ function formatTime(ticks: number): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+/** Parses a local `YYYY-MM-DD` key; rejects impossible dates. */
+function parseDailyKey(key: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key);
+  if (match === null) {
+    return null;
+  }
+  const [, yearText = '', monthText = '', dayText = ''] = match;
+  const date = new Date(Number(yearText), Number(monthText) - 1, Number(dayText));
+  return dailyDateKey(date) === key ? date : null;
 }
 
 function safeStorage(win: Window): StorageLike | null {

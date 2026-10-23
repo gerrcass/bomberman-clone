@@ -72,9 +72,13 @@
             <h1 class="game-title"><span>Bomb</span><span class="title-accent">Blitz</span></h1>
             <p class="title-blurb">Run the maze. Rule the arena.</p>
             <p id="title-best" class="title-best">BEST 000000 · STAGE 0</p>
+            <p id="title-daily-best" class="title-daily-best">DAILY · NO RUN YET</p>
             <p id="title-last-run" class="title-last-run">LAST RUN — none yet</p>
             <div class="title-actions">
               <button id="play-button" class="button button-primary" type="button">Play</button>
+              <button id="daily-run-button" class="button button-daily" type="button">
+                Daily Run
+              </button>
               <button id="records-button" class="button" type="button">Records</button>
               <button id="how-to-button" class="button" type="button">How to Play</button>
               <button id="settings-button" class="button" type="button">Settings</button>
@@ -197,11 +201,13 @@
             <div class="pause-panel">
               <p class="eyebrow">Run over</p>
               <h2 id="gameover-title" class="pause-title">Game Over</h2>
+              <p id="gameover-mode" class="gameover-mode">Endless Run</p>
               <p class="gameover-score-line">
                 Final score
                 <span id="gameover-score" class="gameover-score">000000</span>
               </p>
               <p id="gameover-newbest" class="new-best" hidden>New best!</p>
+              <p id="gameover-new-daily-best" class="new-best" hidden>New daily best!</p>
               <p class="gameover-stage">Reached stage <span id="gameover-stage">1</span></p>
               <dl class="run-stats">
                 <div><dt>Bricks</dt><dd id="gameover-bricks">0</dd></div>
@@ -209,6 +215,12 @@
                 <div><dt>Pickups</dt><dd id="gameover-pickups">0</dd></div>
                 <div><dt>Time</dt><dd id="gameover-time">0:00</dd></div>
               </dl>
+              <p id="gameover-daily" class="gameover-daily" hidden>
+                <span class="gameover-daily-label"
+                  >Daily best · <span id="gameover-daily-date"></span
+                ></span>
+                <span id="gameover-daily-best" class="gameover-daily-score">—</span>
+              </p>
               <div class="pause-actions">
                 <button id="retry-button" class="button button-primary" type="button">
                   Retry Run
@@ -269,6 +281,7 @@
           </section>
 
           <section id="stage-intro" class="stage-intro" aria-live="polite" hidden>
+            <p id="stage-intro-mode" class="eyebrow stage-intro-mode" hidden></p>
             <p class="eyebrow">Stage</p>
             <p id="stage-intro-stage" class="stage-intro-number">1</p>
             <p id="stage-intro-rivals" class="stage-intro-rivals">2 rivals</p>

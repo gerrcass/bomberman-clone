@@ -292,6 +292,17 @@ body {
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 
+.button-daily {
+  border-color: var(--amber);
+  background: linear-gradient(180deg, #3a2d12, #211806);
+  color: var(--amber);
+}
+
+.button-daily:hover {
+  border-color: #ffe3a0;
+  color: #fff3cf;
+}
+
 .controls-hint {
   margin: 0;
   color: var(--muted);
@@ -798,6 +809,39 @@ kbd {
   text-transform: uppercase;
 }
 
+.stage-intro-mode {
+  margin-bottom: 6px;
+  color: var(--cyan);
+  letter-spacing: 0.26em;
+}
+
+.gameover-mode {
+  margin: -10px 0 0;
+  color: var(--cyan);
+  font-family: var(--display-font);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.gameover-daily {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: -6px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.gameover-daily-score {
+  color: var(--amber);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
 @keyframes stage-intro-in {
   from {
     opacity: 0;
@@ -887,6 +931,14 @@ kbd {
 .title-best {
   margin: -2px 0 0;
   color: var(--amber);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.title-daily-best {
+  margin: -8px 0 0;
+  color: var(--cyan);
   font-size: 11px;
   letter-spacing: 0.2em;
   text-transform: uppercase;
@@ -1423,6 +1475,19 @@ html[data-high-contrast="true"] .record-chip {
   border-color: #ffe89a;
   background: #1a1400;
   color: #ffffff;
+}
+
+html[data-high-contrast="true"] .button-daily {
+  border-color: #ffe89a;
+  background: #1a1400;
+  color: #ffe89a;
+}
+
+html[data-high-contrast="true"] .title-daily-best,
+html[data-high-contrast="true"] .stage-intro-mode,
+html[data-high-contrast="true"] .gameover-mode,
+html[data-high-contrast="true"] .gameover-daily-score {
+  color: #ffe89a;
 }
 
 @media (max-width: 640px) {
