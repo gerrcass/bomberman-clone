@@ -1,4 +1,4 @@
-<!-- Write this body with the `pr` skill (.agents/skills/pr/SKILL.md). The evidence gate is docs/agents/pr-evidence.md. CI checks the required sections. -->
+<!-- Write this body with the `pr` skill (.agents/skills/pr/SKILL.md). The evidence gate is docs/agents/pr-evidence.md. CI checks the required sections and rejects external evidence hosts. Upload images/videos with gh --attach so they are hosted on GitHub. -->
 
 ## Summary
 
@@ -9,7 +9,7 @@
 <!-- Add both:
 - **Before:** screenshot, failing test, or baseline output
 - **After:** screenshot, passing test, or new output
-For visual changes, commit docs/screenshots/<slug>-before.png and <slug>-after.png and embed both. -->
+For visual changes, upload with gh --attach so GitHub hosts the media; a committed pair goes under docs/evidence/<slug>/. External image/video hosts are rejected. -->
 
 ## Merge Danger
 
