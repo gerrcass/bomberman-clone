@@ -11,7 +11,7 @@ Bomb Blitz is a browser Bomberman clone: a single-player, endless arena run of m
 - **Decisions**: `docs/adr/`. Read the ADRs that touch the area before changing it; surface conflicts rather than silently overriding them.
 - **Tracker, domain, and triage rules**: `docs/agents/`.
 - **Browser checks**: `docs/agents/browser-verification.md` before reporting presentation work done.
-- **Pull requests**: load the `pr` skill and follow the evidence gate in `docs/agents/pr-evidence.md`; CI checks the body shape.
+- **Pull requests**: load the `pr` skill; upload evidence to GitHub with `gh --attach` and follow the gate in `docs/agents/pr-evidence.md`. CI checks the body shape and rejects external evidence hosts.
 
 Slice history and ticket flow live in `docs/agents/workflow.md`.
 

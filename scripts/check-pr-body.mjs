@@ -26,6 +26,43 @@ const required = [
 
 const missing = required.filter(([, pattern]) => !pattern.test(body)).map(([label]) => label);
 
+function section(source, heading) {
+  const match = new RegExp(`^##\\s+${heading}\\s*$`, 'm').exec(source);
+  if (match === null) {
+    return '';
+  }
+  const rest = source.slice(match.index + match[0].length);
+  const next = /^##\s+/m.exec(rest);
+  return next === null ? rest : rest.slice(0, next.index);
+}
+
+function isGitHubHost(rawUrl) {
+  let host;
+  try {
+    host = new URL(rawUrl).hostname.toLowerCase();
+  } catch {
+    return true;
+  }
+  return (
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    host === '::1' ||
+    host === 'github.com' ||
+    host.endsWith('.github.com') ||
+    host.endsWith('.githubusercontent.com') ||
+    host.endsWith('.github.io')
+  );
+}
+
+const evidence = section(body, 'Evidence');
+// Fenced blocks are quoted output, not evidence links. Keep the host check
+// focused on the actual Evidence prose and attachments.
+const evidenceProse = evidence.replace(/```[\s\S]*?```/g, '');
+const evidenceUrls = [...evidenceProse.matchAll(/https?:\/\/[^\s)>"'`]+/g)].map((match) =>
+  match[0].replace(/[.,;:!?]+$/, ''),
+);
+const externalEvidence = [...new Set(evidenceUrls.filter((url) => !isGitHubHost(url)))];
+
 if (missing.length > 0) {
   console.error('PR body is missing required pr-skill sections:');
   for (const label of missing) {
@@ -37,4 +74,15 @@ if (missing.length > 0) {
   process.exit(1);
 }
 
-console.log('PR body contains the required pr-skill sections.');
+if (externalEvidence.length > 0) {
+  console.error('Evidence links must be hosted on GitHub. External hosts are not allowed:');
+  for (const url of externalEvidence) {
+    console.error(`- ${url}`);
+  }
+  console.error(
+    'Upload screenshots and videos with gh --attach, or commit them under docs/evidence/. Do not use an external image or video host.',
+  );
+  process.exit(1);
+}
+
+console.log('PR body contains the required pr-skill sections and GitHub-hosted evidence.');

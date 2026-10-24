@@ -156,4 +156,4 @@ Draft a technique in a real run, or render one through the dev harness:
 
 ## Evidence
 
-Follow the evidence gate in `docs/agents/pr-evidence.md`. For a visual change, capture before and after from the production build at the same 1280×900 viewport and an isolated browser context. Commit them under `docs/screenshots/` as `<slug>-before.png` and `<slug>-after.png` and embed both in the PR body. README screenshots are current-state documentation, not the PR evidence pair.
+Follow the evidence gate in `docs/agents/pr-evidence.md`. For a visual change, capture before and after from the production build at the same 1280×900 viewport and an isolated browser context. Upload both with `gh --attach` when opening or updating the PR; the gate rejects external image and video hosts. A committed pair goes under `docs/evidence/<slug>/`. README screenshots are current-state documentation, not the PR evidence pair.

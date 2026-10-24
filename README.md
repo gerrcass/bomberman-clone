@@ -278,6 +278,6 @@ npx playwright install --with-deps chromium
 npm run test:smoke
 ```
 
-The `check` job covers docs assets, lint, typecheck, Vitest, and the production build. The `browser-smoke` job runs the Playwright suite against a production preview and the dev harness. A separate `PR body` workflow runs the evidence gate against every pull request body.
+The `check` job covers docs assets, lint, typecheck, Vitest, and the production build. The `browser-smoke` job runs the Playwright suite against a production preview and the dev harness. A separate `PR body` workflow runs the evidence gate against every pull request body. Evidence media is uploaded to GitHub with `gh --attach`; the gate rejects external image and video hosts.
 
 Created in [T3 Code](https://t3.codes).
