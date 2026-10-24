@@ -5,7 +5,7 @@ This repository uses the Matt Pocock engineering skills, installed under `.agent
 ## Ticket flow
 
 - The umbrella spec is issue #1. Its original tickets are sub-issues #2–#9 with native blocking links; they are complete and serve as precedent.
-- The bomb-techniques slice #11–#15 and the run-records slice #17–#21 are closed. The Seed Runs and Share Links slice #23 is implemented on `slice/seed-runs` and awaits its integration PR merge: tickets #24–#27 are closed, and #28 covers documentation and release verification. New work starts under the newest open spec; #1 stays open as the umbrella spec.
+- The bomb-techniques slice #11–#15 and the run-records slice #17–#21 are closed. The Seed Runs and Share Links slice #23 is implemented on `slice/seed-runs` and awaits its integration PR merge: tickets #24–#28 are closed. New work starts under the newest open spec; #1 stays open as the umbrella spec.
 - The current release adds Seed Runs and Share Links: `src/app/seed.ts` owns Seed Codes and Share Links, `src/app/session.ts` owns Run Mode labels/retry/replay, and the profile key is `bomb-blitz.profile.v3` with one-way v2/v1 migration.
 - A ticket is ready when every issue in its `blockedBy.nodes` is closed. Work only the frontier.
 - `to-tickets` publishes vertical slices; `implement-spec` runs the frontier, merges to an integration branch, and closes tickets.

@@ -45,6 +45,8 @@ import {
   type RunSession,
   replaySessionFor,
   retrySeed,
+  runModeBadge,
+  runRecordMode,
   stageIntroModeLabel,
 } from './session';
 
@@ -127,6 +129,11 @@ export function createGameApp(doc: Document): GameApp {
   const titleDailyBest = requireElement<HTMLElement>(doc, '#title-daily-best');
   const titleLastRun = requireElement<HTMLElement>(doc, '#title-last-run');
   const howToScreen = requireElement<HTMLElement>(doc, '#howto-screen');
+  const howToPanel = requireElement<HTMLElement>(doc, '#howto-panel');
+  const howToTitle = requireElement<HTMLElement>(doc, '#howto-title');
+  // The heading is the open-focus target, not a Tab stop. Biome's static HTML
+  // rule rejects a literal tabindex on a non-interactive element, so set it here.
+  howToTitle.tabIndex = -1;
   const howToButton = requireElement<HTMLButtonElement>(doc, '#how-to-button');
   const howToBackButton = requireElement<HTMLButtonElement>(doc, '#howto-back-button');
   const settingsScreen = requireElement<HTMLElement>(doc, '#settings-screen');
@@ -269,10 +276,10 @@ export function createGameApp(doc: Document): GameApp {
       return NO_RUN_OUTCOME;
     }
     runRecorded = true;
-    const dailyDate = runSession.mode === 'daily' ? runSession.dailyDate : null;
+    const modeFields = runRecordMode(runSession);
     const newBest = isNewBest(profile, state.score);
-    const newDailyBest = isNewDailyBest(profile, dailyDate, state.score);
-    const base = {
+    const newDailyBest = isNewDailyBest(profile, modeFields.dailyDate, state.score);
+    const input: RunRecordInput = {
       score: state.score,
       stage: state.stage,
       bricksDestroyed: state.stats.bricksDestroyed,
@@ -281,15 +288,8 @@ export function createGameApp(doc: Document): GameApp {
       elapsedTicks: state.stats.elapsedTicks,
       techniques: ownedTechniqueIds(state.techniques),
       seed: state.seed,
+      ...modeFields,
     };
-    let input: RunRecordInput;
-    if (runSession.mode === 'daily') {
-      input = { ...base, mode: 'daily', dailyDate: runSession.dailyDate };
-    } else if (runSession.mode === 'seed') {
-      input = { ...base, mode: 'seed', dailyDate: null };
-    } else {
-      input = { ...base, mode: 'endless', dailyDate: null };
-    }
     profile = recordRun(profile, input, new Date());
     saveProfile(storage, profile);
     renderTitleProfile();
@@ -303,7 +303,9 @@ export function createGameApp(doc: Document): GameApp {
     screen = 'howto';
     titleScreen.hidden = true;
     howToScreen.hidden = false;
-    howToBackButton.focus({ preventScroll: true });
+    howToPanel.scrollTop = 0;
+    howToScreen.scrollTop = 0;
+    howToTitle.focus({ preventScroll: true });
   }
 
   function closeHowTo(): void {
@@ -512,8 +514,7 @@ export function createGameApp(doc: Document): GameApp {
 
     const badge = doc.createElement('span');
     badge.className = 'record-badge';
-    badge.textContent =
-      record.mode === 'daily' ? 'Daily' : record.mode === 'seed' ? 'Seed' : 'Endless';
+    badge.textContent = runModeBadge(record.mode);
 
     const date = doc.createElement('span');
     date.className = 'record-date';

@@ -435,10 +435,11 @@ describe('profile', () => {
     });
   });
 
-  it('treats an invalid seed supplied to an Endless or Daily record as absent', () => {
-    for (const seed of [-1, 1.5, 0x1_0000_0000, Number.NaN, Number.POSITIVE_INFINITY]) {
-      const profile = recordRun(DEFAULT_PROFILE, result({ seed }), NOW);
-      expect(profile.history[0]?.seed).toBeNull();
+  it('rejects an invalid Seed on every Run Mode', () => {
+    for (const mode of ['endless', 'daily', 'seed'] as const) {
+      for (const seed of [-1, 1.5, 0x1_0000_0000, Number.NaN, Number.POSITIVE_INFINITY]) {
+        expect(() => recordRun(DEFAULT_PROFILE, result({ mode, seed }), NOW)).toThrow(RangeError);
+      }
     }
   });
 

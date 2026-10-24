@@ -59,6 +59,15 @@ function isSeedSegment(segment: string): boolean {
 }
 
 /**
+ * Splits raw query contents into non-empty `key=value` segments. Empty
+ * segments (`?`, a trailing `&`, or `&&`) carry no parameter and are dropped
+ * so building and removing a Seed never leaves a stray separator.
+ */
+function querySegments(query: string | null): readonly string[] {
+  return query === null ? [] : query.split('&').filter((segment) => segment.length > 0);
+}
+
+/**
  * Builds the canonical Share Link for a Seed from the current page URL. The
  * path, every non-seed query parameter, and the hash are preserved; any
  * existing `seed` values are replaced with the canonical uppercase Seed Code.
@@ -67,8 +76,7 @@ function isSeedSegment(segment: string): boolean {
 export function buildShareLink(pageUrl: string, seed: number): string {
   const code = formatSeed(seed);
   const { path, query, hash } = splitPageUrl(pageUrl);
-  const params =
-    query === null ? [] : query.split('&').filter((segment) => !isSeedSegment(segment));
+  const params = querySegments(query).filter((segment) => !isSeedSegment(segment));
   params.push(`seed=${code}`);
   return `${path}?${params.join('&')}${hash}`;
 }
@@ -97,7 +105,7 @@ export function removeSeedParam(pageUrl: string): string {
   if (query === null) {
     return pageUrl;
   }
-  const params = query.split('&');
+  const params = querySegments(query);
   const kept = params.filter((segment) => !isSeedSegment(segment));
   if (kept.length === params.length) {
     return pageUrl;

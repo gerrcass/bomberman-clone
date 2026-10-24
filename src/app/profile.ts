@@ -112,15 +112,7 @@ function parseProfileV3(raw: string): Profile {
     return DEFAULT_PROFILE;
   }
 
-  return {
-    version: 3,
-    highScore: nonNegativeInteger(record['highScore']),
-    bestStage: nonNegativeInteger(record['bestStage']),
-    runsPlayed: nonNegativeInteger(record['runsPlayed']),
-    settings: parseSettings(record['settings']),
-    history: parseHistory(record['history'], false),
-    dailyBest: parseDailyBest(record['dailyBest']),
-  };
+  return profileFromRecord(record, parseHistory(record['history'], false));
 }
 
 /**
@@ -134,13 +126,21 @@ function migrateProfileV2(raw: string): Profile {
     return DEFAULT_PROFILE;
   }
 
+  return profileFromRecord(record, parseHistory(record['history'], true));
+}
+
+/** Maps the shared v3/v2 profile fields and the parsed history into v3. */
+function profileFromRecord(
+  record: Record<string, unknown>,
+  history: readonly RunRecord[],
+): Profile {
   return {
     version: 3,
     highScore: nonNegativeInteger(record['highScore']),
     bestStage: nonNegativeInteger(record['bestStage']),
     runsPlayed: nonNegativeInteger(record['runsPlayed']),
     settings: parseSettings(record['settings']),
-    history: parseHistory(record['history'], true),
+    history,
     dailyBest: parseDailyBest(record['dailyBest']),
   };
 }
@@ -191,10 +191,10 @@ export function saveProfile(storage: StorageLike | null, profile: Profile): void
 
 /** Records a finished Run and returns the updated profile. */
 export function recordRun(profile: Profile, input: RunRecordInput, now: Date): Profile {
-  const seed = isSeed(input.seed) ? input.seed : null;
-  if (input.mode === 'seed' && seed === null) {
-    throw new RangeError('A Seed Run requires an unsigned 32-bit Seed');
+  if (!isSeed(input.seed)) {
+    throw new RangeError('A Run Record requires an unsigned 32-bit Seed');
   }
+  const seed = input.seed;
 
   const record: RunRecord = {
     ...input,
@@ -251,14 +251,14 @@ export function updateSettings(profile: Profile, patch: Partial<Settings>): Prof
   };
 }
 
-function parseHistory(value: unknown, migrated: boolean): readonly RunRecord[] {
+function parseHistory(value: unknown, fromV2: boolean): readonly RunRecord[] {
   if (!Array.isArray(value)) {
     return [];
   }
 
   const history: RunRecord[] = [];
   for (const entry of value) {
-    const record = parseRunRecord(entry, migrated);
+    const record = parseRunRecord(entry, fromV2);
     if (record !== null) {
       history.push(record);
     }
@@ -269,7 +269,7 @@ function parseHistory(value: unknown, migrated: boolean): readonly RunRecord[] {
   return history;
 }
 
-function parseRunRecord(value: unknown, migrated: boolean): RunRecord | null {
+function parseRunRecord(value: unknown, fromV2: boolean): RunRecord | null {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return null;
   }
@@ -280,7 +280,7 @@ function parseRunRecord(value: unknown, migrated: boolean): RunRecord | null {
     return null;
   }
   // v2 had no Seed and no Seed Run, so migration can never produce a valid one.
-  if (migrated && mode === 'seed') {
+  if (fromV2 && mode === 'seed') {
     return null;
   }
 
@@ -289,7 +289,7 @@ function parseRunRecord(value: unknown, migrated: boolean): RunRecord | null {
     return null;
   }
 
-  const seed = migrated || !isSeed(record['seed']) ? null : record['seed'];
+  const seed = fromV2 || !isSeed(record['seed']) ? null : record['seed'];
   if (mode === 'seed' && seed === null) {
     return null;
   }
