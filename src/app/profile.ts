@@ -1,5 +1,6 @@
 import { TECHNIQUE_ORDER, type TechniqueId } from '../game';
 import { isDailyKey } from './daily';
+import { isSeed } from './seed';
 
 export interface Settings {
   readonly sound: boolean;
@@ -9,15 +10,17 @@ export interface Settings {
   readonly highContrast: boolean;
 }
 
-export type RunMode = 'endless' | 'daily';
+export type RunMode = 'endless' | 'daily' | 'seed';
 
 /** The persisted summary of one finished Run. */
 export interface RunRecord {
   /** ISO timestamp supplied by the app when the Run finished. */
   readonly finishedAt: string;
   readonly mode: RunMode;
-  /** `YYYY-MM-DD` for a Daily Run, null for an Endless Run. */
+  /** `YYYY-MM-DD` for a Daily Run, null for every other mode. */
   readonly dailyDate: string | null;
+  /** The Run's 32-bit Seed, or null for a record migrated before seed capture. */
+  readonly seed: number | null;
   readonly score: number;
   readonly stage: number;
   readonly bricksDestroyed: number;
@@ -35,7 +38,7 @@ export interface DailyBest {
 }
 
 export interface Profile {
-  readonly version: 2;
+  readonly version: 3;
   readonly highScore: number;
   readonly bestStage: number;
   readonly runsPlayed: number;
@@ -44,7 +47,8 @@ export interface Profile {
   readonly dailyBest: DailyBest | null;
 }
 
-export const PROFILE_KEY = 'bomb-blitz.profile.v2';
+export const PROFILE_KEY = 'bomb-blitz.profile.v3';
+export const V2_PROFILE_KEY = 'bomb-blitz.profile.v2';
 export const LEGACY_PROFILE_KEY = 'bomb-blitz.profile.v1';
 export const RUN_HISTORY_LIMIT = 20;
 
@@ -57,7 +61,7 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 export const DEFAULT_PROFILE: Profile = {
-  version: 2,
+  version: 3,
   highScore: 0,
   bestStage: 0,
   runsPlayed: 0,
@@ -71,13 +75,14 @@ export interface StorageLike {
   setItem(key: string, value: string): void;
 }
 
-type RunRecordBase = Omit<RunRecord, 'finishedAt' | 'mode' | 'dailyDate'>;
+type RunRecordBase = Omit<RunRecord, 'finishedAt' | 'mode' | 'dailyDate' | 'seed'>;
 
-/** The summary a finished Run supplies to `recordRun`. */
+/** The summary a finished Run supplies to `recordRun`. New records carry a Seed. */
 export type RunRecordInput = RunRecordBase &
   (
-    | { readonly mode: 'endless'; readonly dailyDate: null }
-    | { readonly mode: 'daily'; readonly dailyDate: string }
+    | { readonly mode: 'endless'; readonly dailyDate: null; readonly seed: number }
+    | { readonly mode: 'daily'; readonly dailyDate: string; readonly seed: number }
+    | { readonly mode: 'seed'; readonly dailyDate: null; readonly seed: number }
   );
 
 export function loadProfile(storage: StorageLike | null): Profile {
@@ -87,60 +92,90 @@ export function loadProfile(storage: StorageLike | null): Profile {
 
   try {
     const raw = storage.getItem(PROFILE_KEY);
-    if (raw === null) {
-      return loadLegacyProfile(storage);
+    if (raw !== null) {
+      return parseProfileV3(raw);
     }
-    const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-      return DEFAULT_PROFILE;
+    const v2Raw = storage.getItem(V2_PROFILE_KEY);
+    if (v2Raw !== null) {
+      return migrateProfileV2(v2Raw);
     }
-
-    const record = parsed as Record<string, unknown>;
-    if (record['version'] !== 2) {
-      return DEFAULT_PROFILE;
-    }
-    return {
-      version: 2,
-      highScore: nonNegativeInteger(record['highScore']),
-      bestStage: nonNegativeInteger(record['bestStage']),
-      runsPlayed: nonNegativeInteger(record['runsPlayed']),
-      settings: parseSettings(record['settings']),
-      history: parseHistory(record['history']),
-      dailyBest: parseDailyBest(record['dailyBest']),
-    };
+    return loadLegacyProfile(storage);
   } catch {
     return DEFAULT_PROFILE;
   }
 }
 
-/**
- * Reads the v1 key once, when v2 is absent, and maps it into v2. The v1 key is
- * never written, so a downgrade still finds the old profile intact.
- */
-function loadLegacyProfile(storage: StorageLike): Profile {
-  try {
-    const raw = storage.getItem(LEGACY_PROFILE_KEY);
-    if (raw === null) {
-      return DEFAULT_PROFILE;
-    }
-    const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-      return DEFAULT_PROFILE;
-    }
-
-    const record = parsed as Record<string, unknown>;
-    return {
-      version: 2,
-      highScore: nonNegativeInteger(record['highScore']),
-      bestStage: nonNegativeInteger(record['bestStage']),
-      runsPlayed: nonNegativeInteger(record['runsPlayed']),
-      settings: parseSettings(record['settings']),
-      history: [],
-      dailyBest: null,
-    };
-  } catch {
+/** Parses the authoritative v3 value. A malformed v3 never rereads v2 or v1. */
+function parseProfileV3(raw: string): Profile {
+  const record = parseObject(raw);
+  if (record === null || record['version'] !== 3) {
     return DEFAULT_PROFILE;
   }
+
+  return {
+    version: 3,
+    highScore: nonNegativeInteger(record['highScore']),
+    bestStage: nonNegativeInteger(record['bestStage']),
+    runsPlayed: nonNegativeInteger(record['runsPlayed']),
+    settings: parseSettings(record['settings']),
+    history: parseHistory(record['history'], false),
+    dailyBest: parseDailyBest(record['dailyBest']),
+  };
+}
+
+/**
+ * Reads the v2 key once, when v3 is absent, and maps it into v3. Historical
+ * records migrate without a Seed. The v2 key is never written, so a downgrade
+ * still finds the old profile intact. A malformed v2 does not fall back to v1.
+ */
+function migrateProfileV2(raw: string): Profile {
+  const record = parseObject(raw);
+  if (record === null || record['version'] !== 2) {
+    return DEFAULT_PROFILE;
+  }
+
+  return {
+    version: 3,
+    highScore: nonNegativeInteger(record['highScore']),
+    bestStage: nonNegativeInteger(record['bestStage']),
+    runsPlayed: nonNegativeInteger(record['runsPlayed']),
+    settings: parseSettings(record['settings']),
+    history: parseHistory(record['history'], true),
+    dailyBest: parseDailyBest(record['dailyBest']),
+  };
+}
+
+/**
+ * Reads the v1 key once, when v3 and v2 are absent, and maps it into v3. The
+ * v1 schema has no Run History or Daily Best. The v1 key is never written.
+ */
+function loadLegacyProfile(storage: StorageLike): Profile {
+  const raw = storage.getItem(LEGACY_PROFILE_KEY);
+  if (raw === null) {
+    return DEFAULT_PROFILE;
+  }
+  const record = parseObject(raw);
+  if (record === null) {
+    return DEFAULT_PROFILE;
+  }
+
+  return {
+    version: 3,
+    highScore: nonNegativeInteger(record['highScore']),
+    bestStage: nonNegativeInteger(record['bestStage']),
+    runsPlayed: nonNegativeInteger(record['runsPlayed']),
+    settings: parseSettings(record['settings']),
+    history: [],
+    dailyBest: null,
+  };
+}
+
+function parseObject(raw: string): Record<string, unknown> | null {
+  const parsed: unknown = JSON.parse(raw);
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    return null;
+  }
+  return parsed as Record<string, unknown>;
 }
 
 export function saveProfile(storage: StorageLike | null, profile: Profile): void {
@@ -156,9 +191,15 @@ export function saveProfile(storage: StorageLike | null, profile: Profile): void
 
 /** Records a finished Run and returns the updated profile. */
 export function recordRun(profile: Profile, input: RunRecordInput, now: Date): Profile {
+  const seed = isSeed(input.seed) ? input.seed : null;
+  if (input.mode === 'seed' && seed === null) {
+    throw new RangeError('A Seed Run requires an unsigned 32-bit Seed');
+  }
+
   const record: RunRecord = {
     ...input,
     finishedAt: now.toISOString(),
+    seed,
     score: nonNegativeInteger(input.score),
     stage: nonNegativeInteger(input.stage),
     bricksDestroyed: nonNegativeInteger(input.bricksDestroyed),
@@ -210,14 +251,14 @@ export function updateSettings(profile: Profile, patch: Partial<Settings>): Prof
   };
 }
 
-function parseHistory(value: unknown): readonly RunRecord[] {
+function parseHistory(value: unknown, migrated: boolean): readonly RunRecord[] {
   if (!Array.isArray(value)) {
     return [];
   }
 
   const history: RunRecord[] = [];
   for (const entry of value) {
-    const record = parseRunRecord(entry);
+    const record = parseRunRecord(entry, migrated);
     if (record !== null) {
       history.push(record);
     }
@@ -228,19 +269,28 @@ function parseHistory(value: unknown): readonly RunRecord[] {
   return history;
 }
 
-function parseRunRecord(value: unknown): RunRecord | null {
+function parseRunRecord(value: unknown, migrated: boolean): RunRecord | null {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return null;
   }
 
   const record = value as Record<string, unknown>;
   const mode = record['mode'];
-  if (mode !== 'endless' && mode !== 'daily') {
+  if (mode !== 'endless' && mode !== 'daily' && mode !== 'seed') {
+    return null;
+  }
+  // v2 had no Seed and no Seed Run, so migration can never produce a valid one.
+  if (migrated && mode === 'seed') {
     return null;
   }
 
   const finishedAt = record['finishedAt'];
   if (typeof finishedAt !== 'string' || Number.isNaN(Date.parse(finishedAt))) {
+    return null;
+  }
+
+  const seed = migrated || !isSeed(record['seed']) ? null : record['seed'];
+  if (mode === 'seed' && seed === null) {
     return null;
   }
 
@@ -257,6 +307,7 @@ function parseRunRecord(value: unknown): RunRecord | null {
     finishedAt,
     mode,
     dailyDate,
+    seed,
     score: nonNegativeInteger(record['score']),
     stage: nonNegativeInteger(record['stage']),
     bricksDestroyed: nonNegativeInteger(record['bricksDestroyed']),

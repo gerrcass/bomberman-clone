@@ -33,6 +33,7 @@ import {
   saveProfile,
   updateSettings,
 } from './profile';
+import { formatSeed } from './seed';
 
 type ScreenState =
   | 'title'
@@ -98,6 +99,7 @@ export function createGameApp(doc: Document): GameApp {
   const stageIntroRivals = requireElement<HTMLElement>(doc, '#stage-intro-rivals');
   const gameoverScreen = requireElement<HTMLElement>(doc, '#gameover-screen');
   const gameoverMode = requireElement<HTMLElement>(doc, '#gameover-mode');
+  const gameoverSeed = requireElement<HTMLElement>(doc, '#gameover-seed');
   const gameoverScore = requireElement<HTMLElement>(doc, '#gameover-score');
   const gameoverStage = requireElement<HTMLElement>(doc, '#gameover-stage');
   const gameoverBricks = requireElement<HTMLElement>(doc, '#gameover-bricks');
@@ -256,6 +258,7 @@ export function createGameApp(doc: Document): GameApp {
       powerUpsCollected: state.stats.powerUpsCollected,
       elapsedTicks: state.stats.elapsedTicks,
       techniques: ownedTechniqueIds(state.techniques),
+      seed: state.seed,
     };
     const input: RunRecordInput =
       dailyDate === null
@@ -383,7 +386,8 @@ export function createGameApp(doc: Document): GameApp {
 
     const badge = doc.createElement('span');
     badge.className = 'record-badge';
-    badge.textContent = record.mode === 'daily' ? 'Daily' : 'Endless';
+    badge.textContent =
+      record.mode === 'daily' ? 'Daily' : record.mode === 'seed' ? 'Seed' : 'Endless';
 
     const date = doc.createElement('span');
     date.className = 'record-date';
@@ -417,7 +421,16 @@ export function createGameApp(doc: Document): GameApp {
       stats.append(stat);
     }
 
-    row.append(head, stage, stats);
+    row.append(head, stage);
+
+    if (record.seed !== null) {
+      const seed = doc.createElement('p');
+      seed.className = 'record-seed';
+      seed.textContent = `Seed · ${formatSeed(record.seed)}`;
+      row.append(seed);
+    }
+
+    row.append(stats);
 
     if (record.techniques.length > 0) {
       const chips = doc.createElement('ul');
@@ -705,6 +718,7 @@ export function createGameApp(doc: Document): GameApp {
       recorded ?? (isRealGameOver ? recordFinishedRun(state) : NO_RUN_OUTCOME);
     const dailyKey = runSession.mode === 'daily' ? runSession.dailyDate : null;
     setText(gameoverMode, dailyKey === null ? 'Endless Run' : `Daily Run · ${dailyKey}`);
+    setText(gameoverSeed, `Seed · ${formatSeed(state.seed)}`);
     if (dailyKey !== null) {
       const daily = profile.dailyBest;
       setText(gameoverDailyDate, dailyKey);
