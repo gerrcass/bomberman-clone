@@ -8,7 +8,7 @@ The game is split so that parallel work can land without fighting over the same 
 | --- | --- | --- |
 | `src/game/` | Arena generation, seeded RNG, Stage Theme definitions and selection, movement, bombs, blasts, pickups, rival AI, run rules, scoring, upgrades | Game modules only; no DOM, Canvas, or Web Audio |
 | `src/game/themes.ts` | Stage Theme IDs, display names, brick densities, and the seeded four-Stage theme cycle | RNG only; no arena, renderer, app, or clock |
-| `src/game/arena.ts` | Per-theme wall layouts, brick density, spawn protection, and connectivity invariants | Theme definitions and game types |
+| `src/game/arena.ts` | Per-theme wall layouts, brick density, spawn protection, and connectivity invariants | RNG, theme definitions, and game types |
 | `src/render/` | Sprite generation, Canvas drawing, particles, screen shake, terrain palettes | `src/game` types and read-only state |
 | `src/render/theme-palettes.ts` | One terrain palette per Stage Theme: floor, wall, brick, and brick-debris colours | Game theme types only |
 | `src/audio/` | Synthesized SFX, music loop, audio unlock | `src/game` event types |
