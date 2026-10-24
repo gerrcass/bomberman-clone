@@ -12,7 +12,7 @@ This repository uses the Matt Pocock engineering skills, installed under `.agent
 - Each ticket is implemented test-first and verified against its acceptance criteria before it is closed.
 - A fresh worktree has no `node_modules`; run `npm ci` there before `npm run check`.
 - The `implement-spec` orchestrator keeps its turn open while an implementer runs. A subagent that outlives the turn leaves work unmerged; continue the thread and inspect its worktree before spawning anything new.
-- A slice ends with one integration PR to `main`. After it merges, close the slice spec with a verification comment and remove its worktrees. Closed specs are not reopened; new scope gets a new spec issue.
+- A slice ends with one integration PR to `main`, written with the `pr` skill and passing the evidence gate in `docs/agents/pr-evidence.md`. After it merges, close the slice spec with a verification comment and remove its worktrees. Closed specs are not reopened; new scope gets a new spec issue.
 
 ## Skills
 

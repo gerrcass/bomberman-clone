@@ -17,6 +17,7 @@
     "lint": "biome check .",
     "format": "biome check --write .",
     "check:docs": "node scripts/check-docs-assets.mjs",
+    "check:pr-body": "node scripts/check-pr-body.mjs",
     "check": "npm run check:docs && npm run lint && npm run typecheck && npm run test && npm run build"
   },
   "devDependencies": {
