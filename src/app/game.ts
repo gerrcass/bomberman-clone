@@ -33,7 +33,8 @@ import {
   saveProfile,
   updateSettings,
 } from './profile';
-import { formatSeed } from './seed';
+import { formatSeed, parseSeedCode } from './seed';
+import { gameOverModeLabel, type RunSession, retrySeed, stageIntroModeLabel } from './session';
 
 type ScreenState =
   | 'title'
@@ -43,10 +44,12 @@ type ScreenState =
   | 'gameover'
   | 'howto'
   | 'settings'
-  | 'records';
+  | 'records'
+  | 'seed';
 
 const TITLE_SEED = 7;
 const STAGE_INTRO_TICKS = 90;
+const SEED_INPUT_ERROR = 'Enter a valid Seed Code: 1–7 letters or numbers within the 32-bit range.';
 
 export interface GameApp {
   start(): void;
@@ -56,11 +59,6 @@ interface RunRecordOutcome {
   readonly newBest: boolean;
   readonly newDailyBest: boolean;
 }
-
-/** The mode and captured date/seed for the current Run. */
-type RunSession =
-  | { readonly mode: 'endless' }
-  | { readonly mode: 'daily'; readonly dailyDate: string; readonly dailySeed: number };
 
 const NO_RUN_OUTCOME: RunRecordOutcome = { newBest: false, newDailyBest: false };
 
@@ -141,8 +139,14 @@ export function createGameApp(doc: Document): GameApp {
   const recordsList = requireElement<HTMLOListElement>(doc, '#records-list');
   const recordsEmpty = requireElement<HTMLElement>(doc, '#records-empty');
   const gameoverNewBest = requireElement<HTMLElement>(doc, '#gameover-newbest');
+  const seedScreen = requireElement<HTMLElement>(doc, '#seed-screen');
+  const seedForm = requireElement<HTMLFormElement>(doc, '#seed-form');
+  const seedInput = requireElement<HTMLInputElement>(doc, '#seed-input');
+  const seedError = requireElement<HTMLElement>(doc, '#seed-error');
+  const seedBackButton = requireElement<HTMLButtonElement>(doc, '#seed-back-button');
   const playButton = requireElement<HTMLButtonElement>(doc, '#play-button');
   const dailyRunButton = requireElement<HTMLButtonElement>(doc, '#daily-run-button');
+  const seedRunButton = requireElement<HTMLButtonElement>(doc, '#seed-run-button');
   const resumeButton = requireElement<HTMLButtonElement>(doc, '#resume-button');
   const quitButton = requireElement<HTMLButtonElement>(doc, '#quit-button');
   const retryButton = requireElement<HTMLButtonElement>(doc, '#retry-button');
@@ -185,6 +189,8 @@ export function createGameApp(doc: Document): GameApp {
         closeHowTo();
       } else if (screen === 'records') {
         closeRecords();
+      } else if (screen === 'seed') {
+        closeSeedRun();
       }
     },
   });
@@ -193,7 +199,7 @@ export function createGameApp(doc: Document): GameApp {
     if (screen === 'records') {
       return recordsReturn === 'title' ? titleStage : run.getState().stageState;
     }
-    return screen === 'title' || screen === 'howto' || screen === 'settings'
+    return screen === 'title' || screen === 'howto' || screen === 'settings' || screen === 'seed'
       ? titleStage
       : run.getState().stageState;
   }
@@ -260,10 +266,14 @@ export function createGameApp(doc: Document): GameApp {
       techniques: ownedTechniqueIds(state.techniques),
       seed: state.seed,
     };
-    const input: RunRecordInput =
-      dailyDate === null
-        ? { ...base, mode: 'endless', dailyDate: null }
-        : { ...base, mode: 'daily', dailyDate };
+    let input: RunRecordInput;
+    if (runSession.mode === 'daily') {
+      input = { ...base, mode: 'daily', dailyDate: runSession.dailyDate };
+    } else if (runSession.mode === 'seed') {
+      input = { ...base, mode: 'seed', dailyDate: null };
+    } else {
+      input = { ...base, mode: 'endless', dailyDate: null };
+    }
     profile = recordRun(profile, input, new Date());
     saveProfile(storage, profile);
     renderTitleProfile();
@@ -354,6 +364,65 @@ export function createGameApp(doc: Document): GameApp {
       gameoverScreen.hidden = false;
       gameoverRecordsButton.focus();
     }
+  }
+
+  function openSeedRun(prefill = ''): void {
+    if (screen !== 'title') {
+      return;
+    }
+    screen = 'seed';
+    titleScreen.hidden = true;
+    seedScreen.hidden = false;
+    seedInput.value = prefill;
+    clearSeedError();
+    seedInput.focus({ preventScroll: true });
+    if (prefill.length > 0) {
+      seedInput.select();
+    }
+  }
+
+  function closeSeedRun(): void {
+    if (screen !== 'seed') {
+      return;
+    }
+    screen = 'title';
+    seedScreen.hidden = true;
+    titleScreen.hidden = false;
+    clearSeedError();
+    seedRunButton.focus();
+  }
+
+  function submitSeedRun(): void {
+    if (screen !== 'seed') {
+      return;
+    }
+    const seed = parseSeedCode(seedInput.value);
+    if (seed === null) {
+      showSeedError();
+      seedInput.focus({ preventScroll: true });
+      return;
+    }
+    clearSeedError();
+    startSeedRun(seed);
+  }
+
+  function startSeedRun(seed: number): void {
+    beginRun(createRun(seed), { mode: 'seed', seed });
+  }
+
+  function showSeedError(): void {
+    seedInput.setAttribute('aria-invalid', 'true');
+    // Replacing the text re-announces the alert when the same invalid code is
+    // submitted twice.
+    seedError.textContent = '';
+    seedError.hidden = false;
+    seedError.textContent = SEED_INPUT_ERROR;
+  }
+
+  function clearSeedError(): void {
+    seedError.hidden = true;
+    seedError.textContent = '';
+    seedInput.removeAttribute('aria-invalid');
   }
 
   function renderRecords(): void {
@@ -508,13 +577,10 @@ export function createGameApp(doc: Document): GameApp {
   }
 
   function retryRun(): void {
-    if (runSession.mode === 'daily') {
-      // Retry reuses the captured key and seed, so crossing midnight cannot
-      // swap the challenge while the player is still on the game-over screen.
-      beginRun(createRun(runSession.dailySeed), runSession);
-      return;
-    }
-    startRun();
+    // Seed and Daily Runs reuse their captured Seed; crossing midnight cannot
+    // swap a Daily Run's challenge while the player is still on Game Over.
+    const seed = retrySeed(runSession, () => Date.now() >>> 0);
+    beginRun(createRun(seed), runSession);
   }
 
   function beginRun(nextRun: Run, session: RunSession): void {
@@ -531,6 +597,7 @@ export function createGameApp(doc: Document): GameApp {
     howToScreen.hidden = true;
     settingsScreen.hidden = true;
     recordsScreen.hidden = true;
+    seedScreen.hidden = true;
     intermissionScreen.hidden = true;
     gameoverScreen.hidden = true;
     hud.hidden = false;
@@ -545,12 +612,13 @@ export function createGameApp(doc: Document): GameApp {
   function beginStageIntro(): void {
     const state = run.getState();
     const rivals = state.stageState.rivals.length;
-    if (runSession.mode === 'daily') {
-      setText(stageIntroMode, `Daily Run · ${runSession.dailyDate}`);
-      stageIntroMode.hidden = false;
-    } else {
+    const modeLabel = stageIntroModeLabel(runSession);
+    if (modeLabel === null) {
       setText(stageIntroMode, '');
       stageIntroMode.hidden = true;
+    } else {
+      setText(stageIntroMode, modeLabel);
+      stageIntroMode.hidden = false;
     }
     setText(stageIntroStage, String(state.stage));
     setText(
@@ -717,7 +785,7 @@ export function createGameApp(doc: Document): GameApp {
     const outcome: RunRecordOutcome =
       recorded ?? (isRealGameOver ? recordFinishedRun(state) : NO_RUN_OUTCOME);
     const dailyKey = runSession.mode === 'daily' ? runSession.dailyDate : null;
-    setText(gameoverMode, dailyKey === null ? 'Endless Run' : `Daily Run · ${dailyKey}`);
+    setText(gameoverMode, gameOverModeLabel(runSession));
     setText(gameoverSeed, `Seed · ${formatSeed(state.seed)}`);
     if (dailyKey !== null) {
       const daily = profile.dailyBest;
@@ -752,6 +820,7 @@ export function createGameApp(doc: Document): GameApp {
     howToScreen.hidden = true;
     settingsScreen.hidden = true;
     recordsScreen.hidden = true;
+    seedScreen.hidden = true;
     intermissionScreen.hidden = true;
     gameoverScreen.hidden = true;
     stageIntro.hidden = true;
@@ -957,11 +1026,17 @@ export function createGameApp(doc: Document): GameApp {
       closeRecords();
       return;
     }
+    if (event.key === 'Escape' && screen === 'seed') {
+      event.preventDefault();
+      closeSeedRun();
+      return;
+    }
     onIntermissionKeyDown(event);
   }
 
   playButton.addEventListener('click', startRun);
   dailyRunButton.addEventListener('click', startDailyRun);
+  seedRunButton.addEventListener('click', () => openSeedRun());
   resumeButton.addEventListener('click', resumeGame);
   quitButton.addEventListener('click', onQuitClick);
   retryButton.addEventListener('click', retryRun);
@@ -974,6 +1049,12 @@ export function createGameApp(doc: Document): GameApp {
   recordsButton.addEventListener('click', () => openRecords('title'));
   gameoverRecordsButton.addEventListener('click', () => openRecords('gameover'));
   recordsBackButton.addEventListener('click', closeRecords);
+  seedForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    submitSeedRun();
+  });
+  seedBackButton.addEventListener('click', closeSeedRun);
+  seedInput.addEventListener('input', clearSeedError);
   settingSound.addEventListener('change', onSettingChange);
   settingMusic.addEventListener('change', onSettingChange);
   settingShake.addEventListener('change', onSettingChange);
@@ -987,6 +1068,7 @@ export function createGameApp(doc: Document): GameApp {
   howToScreen.addEventListener('keydown', (event) => trapDialogFocus(event, howToScreen));
   settingsScreen.addEventListener('keydown', (event) => trapDialogFocus(event, settingsScreen));
   recordsScreen.addEventListener('keydown', (event) => trapDialogFocus(event, recordsScreen));
+  seedScreen.addEventListener('keydown', (event) => trapDialogFocus(event, seedScreen));
   doc.addEventListener('keydown', onGlobalKeyDown);
   doc.addEventListener('click', (event) => {
     const target = event.target;
@@ -1013,6 +1095,7 @@ export function createGameApp(doc: Document): GameApp {
         startPierceRun(): void;
         startDraftRun(): void;
         startDailyRunOn(dateKey?: string): void;
+        openSeedRun(code?: string): void;
         state(): unknown;
       };
     };
@@ -1121,6 +1204,12 @@ export function createGameApp(doc: Document): GameApp {
         }
         const seed = dailySeed(date);
         beginRun(createRun(seed), { mode: 'daily', dailyDate: key, dailySeed: seed });
+      },
+      openSeedRun(code = ''): void {
+        if (screen !== 'title') {
+          quitToTitle();
+        }
+        openSeedRun(code);
       },
       state(): unknown {
         const state = run.getState();

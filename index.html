@@ -79,6 +79,7 @@
               <button id="daily-run-button" class="button button-daily" type="button">
                 Daily Run
               </button>
+              <button id="seed-run-button" class="button" type="button">Seed Run</button>
               <button id="records-button" class="button" type="button">Records</button>
               <button id="how-to-button" class="button" type="button">How to Play</button>
               <button id="settings-button" class="button" type="button">Settings</button>
@@ -195,6 +196,48 @@
               </div>
               <button id="settings-back-button" class="button button-primary" type="button">Back</button>
               <p class="controls-hint">Changes save immediately.</p>
+            </div>
+          </section>
+
+          <section
+            id="seed-screen"
+            class="screen seed-screen"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="seed-title"
+            aria-describedby="seed-help"
+            hidden
+          >
+            <div class="seed-panel">
+              <p class="eyebrow">Fixed arena</p>
+              <h2 id="seed-title" class="pause-title">Seed Run</h2>
+              <p id="seed-help" class="seed-help">
+                A Seed Code starts a Run from a fixed Seed. The same code reproduces the arena
+                sequence and draft offers, not your actions.
+              </p>
+              <form id="seed-form" class="seed-form" novalidate>
+                <label class="seed-label" for="seed-input">Seed Code</label>
+                <input
+                  id="seed-input"
+                  class="seed-input"
+                  name="seed-code"
+                  type="text"
+                  placeholder="e.g. 1Z141Z3"
+                  autocomplete="off"
+                  autocapitalize="characters"
+                  spellcheck="false"
+                  aria-required="true"
+                  aria-describedby="seed-help seed-error"
+                />
+                <p id="seed-error" class="seed-error" role="alert" hidden></p>
+                <button id="seed-start-button" class="button button-primary" type="submit">
+                  Start Seed Run
+                </button>
+              </form>
+              <button id="seed-back-button" class="button" type="button">Back</button>
+              <p class="controls-hint">
+                <kbd>Enter</kbd> start<span class="hint-sep">·</span><kbd>Esc</kbd> back
+              </p>
             </div>
           </section>
 

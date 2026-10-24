@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { createRun, type Intent, type Run } from '../game';
 import { formatSeed, parseSeedCode } from './seed';
 
 describe('formatSeed', () => {
@@ -54,5 +55,64 @@ describe('parseSeedCode', () => {
   it('ignores leading zeroes when counting significant characters', () => {
     expect(parseSeedCode('0000001Z141Z3')).toBe(0xffffffff);
     expect(parseSeedCode('000000000')).toBe(0);
+  });
+});
+
+/** Builds a Run from a Seed Code and drives a scripted intent stream. */
+function createSeedRun(code: string, script: readonly Intent[]): Run | null {
+  const seed = parseSeedCode(code);
+  if (seed === null) {
+    return null;
+  }
+  const run = createRun(seed, {
+    firstStage: {
+      arena: ['#########', '#P......#', '#.#####.#', '#.......#', '#########'],
+      rivalCount: 1,
+      rivalSpawns: [{ x: 7, y: 1 }],
+      blastRange: 2,
+      fuseMs: 900,
+    },
+  });
+  for (const intent of script) {
+    run.step(intent);
+  }
+  return run;
+}
+
+describe('seed-mode determinism', () => {
+  it('replays identical state from the same Seed Code and intent script', () => {
+    const script: readonly Intent[] = [
+      { direction: 'right' },
+      { direction: 'right' },
+      { bomb: true },
+      { direction: 'down' },
+      { direction: 'down' },
+      ...Array.from({ length: 120 }, (): Intent => ({})),
+    ];
+
+    const first = createSeedRun(' 1z141z3 ', script);
+    const second = createSeedRun('1Z141Z3', script);
+
+    expect(first).not.toBeNull();
+    expect(second).not.toBeNull();
+    if (first === null || second === null) {
+      return;
+    }
+    expect(first.getState()).toEqual(second.getState());
+    expect(JSON.stringify(first.getState())).toBe(JSON.stringify(second.getState()));
+  });
+
+  it('produces a different first arena for a different Seed', () => {
+    const first = parseSeedCode('SEED1');
+    const second = parseSeedCode('SEED2');
+
+    expect(first).not.toBeNull();
+    expect(second).not.toBeNull();
+    if (first === null || second === null) {
+      return;
+    }
+    expect(createRun(first).getState().stageState.arena).not.toEqual(
+      createRun(second).getState().stageState.arena,
+    );
   });
 });
