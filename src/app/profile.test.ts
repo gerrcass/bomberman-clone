@@ -12,6 +12,7 @@ import {
   type StorageLike,
   saveProfile,
   updateSettings,
+  V2_PROFILE_KEY,
 } from './profile';
 
 const NOW = new Date('2026-10-23T12:00:00.000Z');
@@ -27,6 +28,7 @@ function result(overrides: RecordOverrides = {}): RunRecordInput {
     powerUpsCollected: 7,
     elapsedTicks: 5432,
     techniques: [],
+    seed: 99,
   };
   if (overrides.mode === 'daily') {
     return {
@@ -34,9 +36,25 @@ function result(overrides: RecordOverrides = {}): RunRecordInput {
       ...overrides,
       mode: 'daily',
       dailyDate: overrides.dailyDate ?? '2026-10-23',
+      seed: overrides.seed ?? base.seed,
     };
   }
-  return { ...base, ...overrides, mode: 'endless', dailyDate: null };
+  if (overrides.mode === 'seed') {
+    return {
+      ...base,
+      ...overrides,
+      mode: 'seed',
+      dailyDate: null,
+      seed: overrides.seed ?? base.seed,
+    };
+  }
+  return {
+    ...base,
+    ...overrides,
+    mode: 'endless',
+    dailyDate: null,
+    seed: overrides.seed ?? base.seed,
+  };
 }
 
 function runRecord(score: number, overrides: Partial<RunRecord> = {}): RunRecord {
@@ -51,6 +69,7 @@ function runRecord(score: number, overrides: Partial<RunRecord> = {}): RunRecord
     powerUpsCollected: 3,
     elapsedTicks: 600,
     techniques: [],
+    seed: 42,
     ...overrides,
   };
 }
@@ -75,7 +94,7 @@ describe('profile', () => {
     expect(loadProfile(null)).toEqual(DEFAULT_PROFILE);
     expect(loadProfile(fakeStorage())).toEqual(DEFAULT_PROFILE);
     expect(DEFAULT_PROFILE).toMatchObject({
-      version: 2,
+      version: 3,
       history: [],
       dailyBest: null,
     });
@@ -92,6 +111,19 @@ describe('profile', () => {
     };
     saveProfile(storage, profile);
     expect(loadProfile(storage)).toEqual(profile);
+  });
+
+  it('writes only the v3 key and leaves the old keys untouched', () => {
+    const storage = fakeStorage({
+      [V2_PROFILE_KEY]: '{"version":2}',
+      [LEGACY_PROFILE_KEY]: '{"version":1}',
+    });
+
+    saveProfile(storage, DEFAULT_PROFILE);
+
+    expect(storage.data[PROFILE_KEY]).toBe(JSON.stringify(DEFAULT_PROFILE));
+    expect(storage.data[V2_PROFILE_KEY]).toBe('{"version":2}');
+    expect(storage.data[LEGACY_PROFILE_KEY]).toBe('{"version":1}');
   });
 
   it('updates only the requested setting', () => {
@@ -117,7 +149,7 @@ describe('profile', () => {
     const storage = fakeStorage({ [LEGACY_PROFILE_KEY]: legacy });
 
     expect(loadProfile(storage)).toEqual({
-      version: 2,
+      version: 3,
       highScore: 4321,
       bestStage: 6,
       runsPlayed: 9,
@@ -135,9 +167,79 @@ describe('profile', () => {
     expect(storage.data[PROFILE_KEY]).toBeUndefined();
   });
 
-  it('prefers v2 when both keys exist', () => {
+  it('migrates a v2 profile once, preserving its bests, settings, history, and Daily Best', () => {
+    const dailyEntry = {
+      finishedAt: '2026-10-22T18:30:00.000Z',
+      mode: 'daily',
+      dailyDate: '2026-10-22',
+      score: 8800,
+      stage: 7,
+      bricksDestroyed: 99,
+      rivalsDefeated: 12,
+      powerUpsCollected: 4,
+      elapsedTicks: 9000,
+      techniques: ['kick'],
+    };
+    const endlessEntry = {
+      finishedAt: '2026-10-21T09:15:00.000Z',
+      mode: 'endless',
+      dailyDate: null,
+      // A stray v2 Seed must not survive migration.
+      seed: 1234,
+      score: 4200,
+      stage: 5,
+      bricksDestroyed: 55,
+      rivalsDefeated: 8,
+      powerUpsCollected: 2,
+      elapsedTicks: 6000,
+      techniques: ['remote', 'pierce'],
+    };
+    const v2 = JSON.stringify({
+      version: 2,
+      highScore: 8800,
+      bestStage: 7,
+      runsPlayed: 12,
+      settings: {
+        sound: false,
+        music: true,
+        screenShake: false,
+        reducedMotion: true,
+        highContrast: true,
+      },
+      history: [dailyEntry, endlessEntry],
+      dailyBest: { date: '2026-10-22', score: 8800 },
+    });
+    const storage = fakeStorage({
+      [V2_PROFILE_KEY]: v2,
+      [LEGACY_PROFILE_KEY]: JSON.stringify({ highScore: 999, bestStage: 9, runsPlayed: 9 }),
+    });
+
+    expect(loadProfile(storage)).toEqual({
+      version: 3,
+      highScore: 8800,
+      bestStage: 7,
+      runsPlayed: 12,
+      settings: {
+        sound: false,
+        music: true,
+        screenShake: false,
+        reducedMotion: true,
+        highContrast: true,
+      },
+      history: [
+        { ...dailyEntry, seed: null },
+        { ...endlessEntry, seed: null },
+      ],
+      dailyBest: { date: '2026-10-22', score: 8800 },
+    });
+    expect(storage.data[V2_PROFILE_KEY]).toBe(v2);
+    expect(storage.data[PROFILE_KEY]).toBeUndefined();
+  });
+
+  it('prefers v3 when every profile key exists', () => {
     const storage = fakeStorage({
       [PROFILE_KEY]: JSON.stringify({ ...DEFAULT_PROFILE, highScore: 200 }),
+      [V2_PROFILE_KEY]: JSON.stringify({ ...DEFAULT_PROFILE, version: 2, highScore: 500 }),
       [LEGACY_PROFILE_KEY]: JSON.stringify({ highScore: 999, bestStage: 9, runsPlayed: 9 }),
     });
     expect(loadProfile(storage).highScore).toBe(200);
@@ -154,8 +256,34 @@ describe('profile', () => {
         }),
       ),
     ).toEqual(DEFAULT_PROFILE);
+    expect(
+      loadProfile(
+        fakeStorage({
+          [PROFILE_KEY]: '{nope',
+          [V2_PROFILE_KEY]: JSON.stringify({ version: 2, highScore: 999 }),
+        }),
+      ),
+    ).toEqual(DEFAULT_PROFILE);
     expect(loadProfile(fakeStorage({ [LEGACY_PROFILE_KEY]: '[]' }))).toEqual(DEFAULT_PROFILE);
     expect(loadProfile(fakeStorage({ [LEGACY_PROFILE_KEY]: '{nope' }))).toEqual(DEFAULT_PROFILE);
+  });
+
+  it('never falls back to v1 when a v2 key is present but malformed', () => {
+    expect(loadProfile(fakeStorage({ [V2_PROFILE_KEY]: '{nope' }))).toEqual(DEFAULT_PROFILE);
+    expect(loadProfile(fakeStorage({ [V2_PROFILE_KEY]: 'null' }))).toEqual(DEFAULT_PROFILE);
+    expect(
+      loadProfile(
+        fakeStorage({
+          [V2_PROFILE_KEY]: '{nope',
+          [LEGACY_PROFILE_KEY]: JSON.stringify({ highScore: 999, bestStage: 9 }),
+        }),
+      ),
+    ).toEqual(DEFAULT_PROFILE);
+    expect(
+      loadProfile(
+        fakeStorage({ [V2_PROFILE_KEY]: JSON.stringify({ version: 1, highScore: 500 }) }),
+      ),
+    ).toEqual(DEFAULT_PROFILE);
   });
 
   it('records a finished run as the newest record with its full summary', () => {
@@ -170,6 +298,7 @@ describe('profile', () => {
         finishedAt: '2026-10-23T12:00:00.000Z',
         mode: 'endless',
         dailyDate: null,
+        seed: 99,
         score: 1234,
         stage: 3,
         bricksDestroyed: 40,
@@ -279,6 +408,54 @@ describe('profile', () => {
     expect(next.runsPlayed).toBe(2);
   });
 
+  it('records the mode and Seed for an Endless, Daily, or Seed Run', () => {
+    const endless = recordRun(DEFAULT_PROFILE, result({ mode: 'endless', seed: 1 }), NOW);
+    expect(endless.history[0]).toMatchObject({
+      mode: 'endless',
+      dailyDate: null,
+      seed: 1,
+    });
+
+    const daily = recordRun(
+      DEFAULT_PROFILE,
+      result({ mode: 'daily', dailyDate: '2026-10-23', seed: 2 }),
+      NOW,
+    );
+    expect(daily.history[0]).toMatchObject({
+      mode: 'daily',
+      dailyDate: '2026-10-23',
+      seed: 2,
+    });
+
+    const seed = recordRun(DEFAULT_PROFILE, result({ mode: 'seed', seed: 0 }), NOW);
+    expect(seed.history[0]).toMatchObject({
+      mode: 'seed',
+      dailyDate: null,
+      seed: 0,
+    });
+  });
+
+  it('treats an invalid seed supplied to an Endless or Daily record as absent', () => {
+    for (const seed of [-1, 1.5, 0x1_0000_0000, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const profile = recordRun(DEFAULT_PROFILE, result({ seed }), NOW);
+      expect(profile.history[0]?.seed).toBeNull();
+    }
+  });
+
+  it('never changes the Daily Best from a Seed Run', () => {
+    const base = recordRun(
+      DEFAULT_PROFILE,
+      result({ mode: 'daily', dailyDate: '2026-10-23', score: 800 }),
+      NOW,
+    );
+    const next = recordRun(base, result({ mode: 'seed', seed: 123, score: 5000, stage: 8 }), NOW);
+
+    expect(next.dailyBest).toEqual({ date: '2026-10-23', score: 800 });
+    expect(next.highScore).toBe(5000);
+    expect(next.bestStage).toBe(8);
+    expect(next.runsPlayed).toBe(2);
+  });
+
   it('round-trips history and the Daily Best', () => {
     const storage = fakeStorage();
     const profile: Profile = {
@@ -322,6 +499,96 @@ describe('profile', () => {
     expect(loadProfile(storage).history).toEqual([endless, daily]);
   });
 
+  it('keeps valid Seeds and nulls the Daily Run date on a Seed Run', () => {
+    const zero = runRecord(100, { mode: 'seed', dailyDate: null, seed: 0 });
+    const max = runRecord(200, { mode: 'seed', dailyDate: null, seed: 0xffffffff });
+    const storage = fakeStorage({
+      [PROFILE_KEY]: JSON.stringify({
+        ...DEFAULT_PROFILE,
+        history: [
+          zero,
+          max,
+          { ...max, dailyDate: '2026-10-23' },
+          { ...max, mode: 'endless', dailyDate: '2026-10-23' },
+        ],
+      }),
+    });
+
+    expect(loadProfile(storage).history).toEqual([
+      zero,
+      max,
+      { ...max, dailyDate: null },
+      { ...max, mode: 'endless', dailyDate: null },
+    ]);
+  });
+
+  it('drops a Seed Run record without a valid Seed and keeps its neighbours', () => {
+    const seedRun = runRecord(300, { mode: 'seed', dailyDate: null, seed: 7 });
+    const endless = runRecord(100);
+    const storage = fakeStorage({
+      [PROFILE_KEY]: JSON.stringify({
+        ...DEFAULT_PROFILE,
+        history: [
+          { ...seedRun, seed: null },
+          { ...seedRun, seed: -1 },
+          { ...seedRun, seed: 1.5 },
+          { ...seedRun, seed: 0x1_0000_0000 },
+          { ...seedRun, seed: '7' },
+          seedRun,
+          endless,
+        ],
+      }),
+    });
+
+    expect(loadProfile(storage).history).toEqual([seedRun, endless]);
+  });
+
+  it('treats an invalid Seed on an Endless or Daily record as absent', () => {
+    const invalidSeeds = [-1, 1.5, 0x1_0000_0000, '42', null];
+    const endless = invalidSeeds.map((seed, index) => ({ ...runRecord(index), seed }));
+    const daily = { ...runRecord(99, { mode: 'daily', dailyDate: '2026-10-23' }), seed: -1 };
+    const storage = fakeStorage({
+      [PROFILE_KEY]: JSON.stringify({
+        ...DEFAULT_PROFILE,
+        history: [...endless, daily],
+      }),
+    });
+
+    const loaded = loadProfile(storage).history;
+    expect(loaded).toHaveLength(invalidSeeds.length + 1);
+    for (const record of loaded) {
+      expect(record.seed).toBeNull();
+    }
+  });
+
+  it('treats a non-finite stored Seed as absent', () => {
+    const raw = `{
+      "version": 3,
+      "highScore": 0,
+      "bestStage": 0,
+      "runsPlayed": 0,
+      "settings": {},
+      "dailyBest": null,
+      "history": [{
+        "finishedAt": "2026-10-23T12:00:00.000Z",
+        "mode": "endless",
+        "dailyDate": null,
+        "seed": 1e999,
+        "score": 10,
+        "stage": 1,
+        "bricksDestroyed": 0,
+        "rivalsDefeated": 0,
+        "powerUpsCollected": 0,
+        "elapsedTicks": 0,
+        "techniques": []
+      }]
+    }`;
+    const loaded = loadProfile(fakeStorage({ [PROFILE_KEY]: raw })).history;
+
+    expect(loaded).toHaveLength(1);
+    expect(loaded[0]?.seed).toBeNull();
+  });
+
   it('filters unknown techniques and keeps display order', () => {
     const entry = {
       ...runRecord(100),
@@ -359,7 +626,7 @@ describe('profile', () => {
   it('clamps invalid loaded numbers to non-negative integers', () => {
     const storage = fakeStorage({
       [PROFILE_KEY]: `{
-        "version": 2,
+        "version": 3,
         "highScore": -5,
         "bestStage": 2.8,
         "runsPlayed": 1e999,
@@ -427,9 +694,10 @@ describe('profile', () => {
     expect(profile.settings.screenShake).toBe(DEFAULT_PROFILE.settings.screenShake);
   });
 
-  it('treats a wrong version under the v2 key as malformed', () => {
+  it('treats a wrong version under the v3 key as malformed', () => {
     const storage = fakeStorage({
-      [PROFILE_KEY]: JSON.stringify({ version: 1, highScore: 500 }),
+      [PROFILE_KEY]: JSON.stringify({ version: 2, highScore: 500 }),
+      [V2_PROFILE_KEY]: JSON.stringify({ version: 2, highScore: 600 }),
       [LEGACY_PROFILE_KEY]: JSON.stringify({ highScore: 999 }),
     });
     expect(loadProfile(storage)).toEqual(DEFAULT_PROFILE);

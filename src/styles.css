@@ -825,6 +825,16 @@ kbd {
   text-transform: uppercase;
 }
 
+.gameover-seed {
+  margin: -8px 0 0;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+}
+
 .gameover-daily {
   display: flex;
   align-items: baseline;
@@ -1335,6 +1345,10 @@ html[data-high-contrast="true"] .hud-technique-key {
   border-left-color: var(--cyan);
 }
 
+.record-row[data-mode="seed"] {
+  border-left-color: var(--text);
+}
+
 .record-head {
   display: flex;
   flex-wrap: wrap;
@@ -1365,6 +1379,12 @@ html[data-high-contrast="true"] .hud-technique-key {
   color: var(--cyan);
 }
 
+.record-row[data-mode="seed"] .record-badge {
+  border-color: var(--text);
+  background: #101826;
+  color: var(--text);
+}
+
 .record-date {
   color: var(--muted);
   font-size: 10px;
@@ -1385,6 +1405,16 @@ html[data-high-contrast="true"] .hud-technique-key {
   font-size: 10px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+}
+
+.record-seed {
+  margin: 0;
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
 }
 
 .record-stats {
@@ -1459,6 +1489,10 @@ html[data-high-contrast="true"] .record-row[data-mode="endless"] {
   border-left-color: #7ffcff;
 }
 
+html[data-high-contrast="true"] .record-row[data-mode="seed"] {
+  border-left-color: #ffffff;
+}
+
 html[data-high-contrast="true"] .record-row[data-mode="daily"] .record-badge {
   border-color: #ffe89a;
   background: #1a1400;
@@ -1469,6 +1503,17 @@ html[data-high-contrast="true"] .record-row[data-mode="endless"] .record-badge {
   border-color: #7ffcff;
   background: #001a1d;
   color: #7ffcff;
+}
+
+html[data-high-contrast="true"] .record-row[data-mode="seed"] .record-badge {
+  border-color: #ffffff;
+  background: #000000;
+  color: #ffffff;
+}
+
+html[data-high-contrast="true"] .record-seed,
+html[data-high-contrast="true"] .gameover-seed {
+  color: #ffffff;
 }
 
 html[data-high-contrast="true"] .record-chip {
