@@ -17,6 +17,95 @@ export function formatSeed(seed: number): string {
   return seed.toString(36).toUpperCase();
 }
 
+interface PageUrlParts {
+  readonly path: string;
+  readonly query: string | null;
+  readonly hash: string;
+}
+
+/**
+ * Splits a page URL into the raw path, query contents, and hash. Working with
+ * the raw pieces keeps unrelated parameters byte-for-byte intact instead of
+ * reserializing the whole query string.
+ */
+function splitPageUrl(pageUrl: string): PageUrlParts {
+  const hashIndex = pageUrl.indexOf('#');
+  const hash = hashIndex === -1 ? '' : pageUrl.slice(hashIndex);
+  const beforeHash = hashIndex === -1 ? pageUrl : pageUrl.slice(0, hashIndex);
+  const queryIndex = beforeHash.indexOf('?');
+  if (queryIndex === -1) {
+    return { path: beforeHash, query: null, hash };
+  }
+  return {
+    path: beforeHash.slice(0, queryIndex),
+    query: beforeHash.slice(queryIndex + 1),
+    hash,
+  };
+}
+
+/** The decoded name of one raw `key=value` query segment. */
+function queryParamName(segment: string): string {
+  const equalsIndex = segment.indexOf('=');
+  const rawName = equalsIndex === -1 ? segment : segment.slice(0, equalsIndex);
+  try {
+    return decodeURIComponent(rawName.replace(/\+/g, ' '));
+  } catch {
+    return rawName;
+  }
+}
+
+function isSeedSegment(segment: string): boolean {
+  return queryParamName(segment) === 'seed';
+}
+
+/**
+ * Builds the canonical Share Link for a Seed from the current page URL. The
+ * path, every non-seed query parameter, and the hash are preserved; any
+ * existing `seed` values are replaced with the canonical uppercase Seed Code.
+ * An invalid Seed is a programmer error.
+ */
+export function buildShareLink(pageUrl: string, seed: number): string {
+  const code = formatSeed(seed);
+  const { path, query, hash } = splitPageUrl(pageUrl);
+  const params =
+    query === null ? [] : query.split('&').filter((segment) => !isSeedSegment(segment));
+  params.push(`seed=${code}`);
+  return `${path}?${params.join('&')}${hash}`;
+}
+
+/**
+ * Parses the `seed` query parameter of a Share Link. A missing, empty, or
+ * invalid value returns null. The value uses the same case and whitespace
+ * normalization as a typed Seed Code.
+ */
+export function parseShareLinkSeed(pageUrl: string): number | null {
+  const { query } = splitPageUrl(pageUrl);
+  if (query === null) {
+    return null;
+  }
+  const code = new URLSearchParams(query).get('seed');
+  return code === null ? null : parseSeedCode(code);
+}
+
+/**
+ * Removes only the `seed` query parameter from a URL, preserving the path,
+ * every other parameter (including its raw encoding and order), and the hash.
+ * Used to consume a deep link through the History API.
+ */
+export function removeSeedParam(pageUrl: string): string {
+  const { path, query, hash } = splitPageUrl(pageUrl);
+  if (query === null) {
+    return pageUrl;
+  }
+  const params = query.split('&');
+  const kept = params.filter((segment) => !isSeedSegment(segment));
+  if (kept.length === params.length) {
+    return pageUrl;
+  }
+  const remaining = kept.join('&');
+  return remaining.length === 0 ? `${path}${hash}` : `${path}?${remaining}${hash}`;
+}
+
 const SEED_CODE_PATTERN = /^[0-9A-Za-z]+$/;
 const MAX_SIGNIFICANT_DIGITS = 7;
 
