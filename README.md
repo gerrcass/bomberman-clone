@@ -183,6 +183,9 @@ src/app/                    Browser shell: loop, input, screens, persistence, HU
   profile.ts                Profile v3, v2/v1 migration, Run History, Daily Best
   seed.ts                   Seed Code formatting/parsing and Share Link helpers
   session.ts                Run Mode labels, retry seeding, replay sessions
+scripts/check-docs-assets.mjs README image reference guard
+tests/smoke/                Playwright production and dev-harness smoke tests
+playwright.config.ts        Preview and dev servers for the smoke suite
 .github/workflows/ci.yml    Push and pull-request checks
 .github/workflows/pages.yml GitHub Pages deployment
 ```
@@ -200,10 +203,12 @@ the daily date/seed.
 | `npm run build` | Typecheck and build the static production bundle |
 | `npm run preview` | Serve the production build |
 | `npm run test` | Run Vitest once |
+| `npm run test:smoke` | Build and run the Playwright browser smoke suite |
 | `npm run typecheck` | Run `tsc --noEmit` |
 | `npm run lint` | Run Biome checks |
 | `npm run format` | Apply Biome formatting and safe fixes |
-| `npm run check` | Lint, typecheck, test, and build |
+| `npm run check:docs` | Verify README image references resolve |
+| `npm run check` | Check docs assets, lint, typecheck, test, and build |
 
 ## Testing
 
@@ -238,6 +243,10 @@ tests. Events are additive: movement, bomb, blast, brick, pickup, shield, hit,
 respawn, rival, kicked bomb, stage-clear, and game-over events all flow through
 the tick return value.
 
+`npm run test:smoke` builds the production bundle, starts preview and the dev
+harness, and runs Playwright against the Seed Run, Share Link, Records replay,
+profile migration, and clipboard fallback paths.
+
 ## Static build and deployment
 
 `npm run build` writes a self-contained static site to `dist/`. The Vite base is
@@ -263,6 +272,10 @@ GitHub Actions runs on every push and pull request with Node 22:
 ```text
 npm ci
 npm run check
+npx playwright install --with-deps chromium
+npm run test:smoke
 ```
+
+The `check` job covers docs assets, lint, typecheck, Vitest, and the production build. The `browser-smoke` job runs the Playwright suite against a production preview and the dev harness.
 
 Created in [T3 Code](https://t3.codes).

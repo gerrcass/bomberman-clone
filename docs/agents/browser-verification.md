@@ -26,6 +26,21 @@ Check:
 - The browser console has no exceptions.
 - The Network panel requests only the built JS, CSS, and bundled font.
 
+## Automated smoke
+
+```bash
+npm run test:smoke
+```
+
+This builds the production bundle, starts preview and the dev harness, and runs Playwright against both. It covers the title Seed Run action, Seed Code validation, deep-link cleanup, Records replay, the v2→v3 migration, and the clipboard fallback. CI runs it on every push and pull request.
+
+## Harness and isolation
+
+- Use a fresh browser context for each pass. A shared page can carry a profile from an earlier run and make migration or history checks lie.
+- Clear `localStorage` before checks that start from defaults; seed only the key under test.
+- Prefer `localhost` for preview. If `agent-browser` hangs, use the chrome-devtools MCP with an explicit page ID; do not keep retrying a stuck CLI.
+- Use `window.__bombBlitzDebug` only with `npm run dev`; it is absent from the production build.
+
 ## Screen-state checks
 
 `window.__bombBlitzDebug` exists only in `npm run dev` and only renders production DOM through the real screen functions:
