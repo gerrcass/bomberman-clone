@@ -8,8 +8,9 @@ The game is split so that parallel work can land without fighting over the same 
 | --- | --- | --- |
 | `src/game/` | Arena generation, seeded RNG, Stage Theme definitions and selection, movement, bombs, blasts, pickups, rival AI, run rules, scoring, upgrades | Game modules only; no DOM, Canvas, or Web Audio |
 | `src/game/themes.ts` | Stage Theme IDs, display names, brick densities, and the seeded four-Stage theme cycle | RNG only; no arena, renderer, app, or clock |
-| `src/game/arena.ts` | Per-theme wall layouts, brick density, spawn protection, and connectivity invariants | Theme definitions and game types |
-| `src/render/` | Sprite generation, Canvas drawing, particles, screen shake | `src/game` types and read-only state |
+| `src/game/arena.ts` | Per-theme wall layouts, brick density, spawn protection, and connectivity invariants | RNG, theme definitions, and game types |
+| `src/render/` | Sprite generation, Canvas drawing, particles, screen shake, terrain palettes | `src/game` types and read-only state |
+| `src/render/theme-palettes.ts` | One terrain palette per Stage Theme: floor, wall, brick, and brick-debris colours | Game theme types only |
 | `src/audio/` | Synthesized SFX, music loop, audio unlock | `src/game` event types |
 | `src/app/` | Fixed-timestep loop, keyboard input, screen state, DOM UI, persistence, daily date/seed, wiring | Everything |
 | `src/app/seed.ts` | Seed Code formatting/parsing and Share Link construction/parsing/removal | No game, render, or audio imports; pure and browser-free |
@@ -27,7 +28,7 @@ The game is split so that parallel work can land without fighting over the same 
 - A run carries lives, score, stage, upgrades, and techniques; a stage carries the arena, theme, bombers, bombs, blasts, pickups, AI state, and the player's techniques.
 - A Stage Theme is chosen by a pure function of the run Seed and stage number. Stage 1 and the first Stage of every four-Stage cycle are Pillar Hall; the other three positions are a seeded permutation of the remaining themes. No clock, Run Mode, profile, or browser state participates.
 - A Stage Theme changes terrain layout and palette only. Every theme keeps the border solid, all four spawn corners and their orthogonal interior neighbours clear, every non-wall tile reachable from the player spawn once bricks are cleared, layout walls 180° rotationally symmetric, per-theme brick density, and the hidden power-up guarantee.
-- The simulation exposes a theme ID and never a colour. The renderer owns the terrain palettes and keeps actor, bomb, blast, and power-up colours fixed; the app owns display names and the intro accent.
+- The simulation exposes a theme ID and never a colour. The game layer owns the theme IDs and display names; the renderer owns the terrain palettes and keeps actor, bomb, blast, and power-up colours fixed; the app owns the intro accent.
 - A bomb captures the techniques that affect it — pierce and remote eligibility — at placement. Kick applies when the player walks into a resting bomb. All techniques belong to the player; rivals always use classic bombs.
 - A finished Run records exactly once: Run History is newest-first and capped at 20. A Daily Run also updates the current date's Daily Best; every finished Run updates all-time bests and runs played.
 - A Daily Run seed derives from a pure local-date key. A Seed Run seed comes from a Seed Code. The simulation receives only the Seed: it never learns the Run Mode, date, Seed Code, or Share Link, and midnight passing mid-run does not change the captured seed.
