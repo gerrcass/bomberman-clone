@@ -3,12 +3,13 @@
 Bomb Blitz is a browser Bomberman clone: a single-player arena run of maze
 combat against AI rivals. It is a static Vite + strict TypeScript + Canvas 2D
 game with a deterministic simulation, runtime-generated pixel art, synthesized
-Web Audio, local Run Records, and no backend.
+Web Audio, local Run Records and Share Links, and no backend.
 
 Clear stage after stage by trapping rivals in cross-shaped blasts, break bricks
 to find power-ups, and draft an upgrade between stages. The run ends when your
 lives do; your best score, best stage, today's Daily Best, and last 20 runs stay
-in the browser. Play a fresh Endless Run or today's Daily Run.
+in the browser. Play a fresh Endless Run, today's Daily Run, or a Seed Run from
+a Seed Code someone shared with you.
 
 **Play the live game:** https://gerrcass.github.io/bomberman-clone/
 
@@ -32,7 +33,7 @@ Open the URL Vite prints (usually `http://localhost:5173`).
 | Arrow keys or WASD | Move up, down, left, right |
 | Space | Place a bomb |
 | X | Detonate your live bombs early (Remote Detonation) |
-| Escape or P | Pause / resume, or close Records, Settings, and How to Play |
+| Escape or P | Pause / resume, or close Records, Settings, How to Play, and the Seed Run setup |
 | M | Mute or unmute all audio |
 | Arrow keys, 1–3 | Focus and pick an upgrade card |
 | Tab, Enter | Move focus and activate menu buttons |
@@ -81,7 +82,7 @@ a 1.0× score multiplier, and a 2200 ms fuse.
 The game auto-pauses when the tab becomes hidden and returns paused. Ending a
 run by game over or confirmed quit records it once and updates the profile.
 
-## Run modes and records
+## Run modes, records, and sharing
 
 - **Endless Run** is the default mode. Play starts a fresh seeded run.
 - **Daily Run** seeds the arena from your local calendar date: the `YYYY-MM-DD`
@@ -90,23 +91,46 @@ run by game over or confirmed quit records it once and updates the profile.
   **Daily Best** is the highest score for the current local date and never
   carries over to a new date. The seed is captured when the run starts, so
   midnight does not change a run in progress.
-- Both modes use the same run rules, upgrades, Techniques, and scoring. Every
-  finished run also updates the all-time best score, best stage, and runs played,
-  so a Daily Run is not second-class.
+- **Seed Run** starts from a **Seed Code** entered on the title or opened from a
+  **Share Link**. The same Seed reproduces the arena sequence and draft offers,
+  given the same choices and actions. It does not replay your inputs, so a
+  shared Seed is a shared challenge, not a ghost of the original run.
+- **Seed Codes** are uppercase base36, 1–7 significant characters. Input accepts
+  lowercase letters and surrounding whitespace, leading zeroes are allowed, `0`
+  is a valid Seed, and a code above the unsigned 32-bit range (`0xFFFFFFFF`) is
+  rejected. There is no decimal Seed format, so a code always means one Seed.
+- All three Run Modes use the same run rules, upgrades, Techniques, and scoring.
+  Every finished run updates the all-time best score, best stage, and runs
+  played. Only a Daily Run updates the Daily Best; a Seed Run leaves it alone.
 - **Run History** keeps the 20 most recent **Run Records**, newest first. Each
-  record stores its Run Mode, finish time, Daily Run date, score, stage, bricks,
-  rivals, pickups, elapsed time, and owned Technique IDs.
+  record stores its Run Mode, Seed, finish time, Daily Run date, score, stage,
+  bricks, rivals, pickups, elapsed time, and owned Technique IDs.
 - **Records** opens from the title or game over. It shows the all-time best
   score and stage, today's Daily Best, and every Run Record with its mode badge,
-  local date, score, stage, run statistics, and Technique chips. Back or Escape
-  returns to the title or game over. The title also shows today's Daily Best and
-  the last run.
+  local date, score, stage, run statistics, Technique chips, and, when the
+  record has one, its Seed Code. **Replay seed** starts a Seed Run with that
+  Seed. Records migrated from v2 have no Seed and show neither the code nor the
+  action. Back or Escape returns to the title or game over. The title also shows
+  today's Daily Best and the last run.
+- **Game over** names the Run Mode and shows the Seed Code for every new run.
+  **Copy Seed Link** builds a link from the current page URL with
+  `?seed=<Seed Code>`. It preserves the deployed path, every other query
+  parameter, and the hash, so the link works at a domain root or under a
+  subpath; any existing `seed` values are replaced with the canonical Seed Code.
+  It reports success in a status line, or reveals the link in a selectable field
+  when the Clipboard API is unavailable. Opening a link fills the Seed Run setup
+  and focuses Start; it never auto-starts a run. The `seed` parameter is removed
+  from the address bar after it opens the setup, and an invalid value is
+  ignored.
 
-Retry Run starts another run in the same mode, so a Daily Run retry reuses the
-captured date seed. A new local date produces a new seed and starts today's
-Daily Best empty while older daily records stay in Run History.
+Retry Run keeps the same Seed for a Seed Run, reuses the captured date seed for
+a Daily Run, and draws a fresh Seed for an Endless Run. A new local date starts
+a new Daily Run and an empty Daily Best while older daily records stay in Run
+History.
 
-![Records showing all-time bests, today's Daily Best, and Run History](docs/screenshots/records.png)
+![Seed Run setup with a Seed Code filled in](docs/screenshots/seed-run.png)
+
+![Records showing mode badges, Seed Codes, and Replay seed actions](docs/screenshots/records.png)
 
 ![Daily Run stage intro naming the local date](docs/screenshots/daily-run.png)
 
@@ -119,18 +143,22 @@ terrain and hazard separation; Reduced Motion removes screen shake and
 non-essential animation while keeping gameplay state readable.
 
 The profile is versioned and stored in `localStorage` under
-`bomb-blitz.profile.v2`. The previous key, `bomb-blitz.profile.v1`, is read once
-when v2 is absent: its high score, best stage, runs played, and settings migrate
-into v2 with an empty Run History and no Daily Best, and the v1 key is left
-untouched. Once v2 exists it is authoritative; a malformed v2 falls back to
-defaults rather than resurrecting v1.
+`bomb-blitz.profile.v3`, the authoritative key. When v3 is absent, the
+`bomb-blitz.profile.v2` key is read once and mapped to v3: its high score, best
+stage, runs played, settings, Run History, and Daily Best survive, and every
+migrated record has no Seed. When v2 is also absent, `bomb-blitz.profile.v1` is
+read once: its bests and settings migrate with an empty Run History and no
+Daily Best. The migration is one-way: both older keys are left untouched, and
+saves write only v3. A malformed v3 falls back to defaults rather than
+resurrecting v2 or v1; a malformed v2 does not fall back to v1.
 
 Every profile and Run History field is validated independently. Malformed
 history entries are dropped without losing the rest of the profile, numeric
 fields clamp to non-negative integers, unknown Run Modes are dropped, unknown
-Technique IDs are ignored, and invalid settings fall back per field. Invalid
-JSON or a blocked/full `localStorage` never prevents play, and storage write
-failures are swallowed.
+Technique IDs are ignored, and invalid settings fall back per field. A Seed
+must be an unsigned 32-bit integer or absent; a Seed Run record without a valid
+Seed is dropped. Invalid JSON or a blocked/full `localStorage` never prevents
+play, and storage write failures are swallowed.
 
 ## Project structure
 
@@ -149,16 +177,20 @@ src/game/                   Deterministic simulation (no DOM, Canvas, or audio)
   run.ts                    Endless run loop, scoring, intermission state
 src/render/                 Runtime pixel art, particles, camera, Canvas renderer
 src/audio/                  Synthesized SFX and chiptune loop
-src/app/                    Loop, input, screens, settings, profile, daily seed, HUD
+src/app/                    Browser shell: loop, input, screens, persistence, HUD
   daily.ts                  Local YYYY-MM-DD date key and stable Daily Run seed
-  profile.ts                Profile v2, v1 migration, Run History, Daily Best
+  game.ts                   Screen state, Records, Seed Run setup, game over, sharing
+  profile.ts                Profile v3, v2/v1 migration, Run History, Daily Best
+  seed.ts                   Seed Code formatting/parsing and Share Link helpers
+  session.ts                Run Mode labels, retry seeding, replay sessions
 .github/workflows/ci.yml    Push and pull-request checks
 .github/workflows/pages.yml GitHub Pages deployment
 ```
 
 Game tests never touch a browser: they build stages from seeds or ASCII arena
 fixtures and drive the fixed 1/60-second simulation directly. Renderer and app
-tests cover snapshotting, profile persistence, and the daily date/seed.
+tests cover snapshotting, profile persistence, Seed Codes and Share Links, and
+the daily date/seed.
 
 ## Commands
 
@@ -184,9 +216,11 @@ maps and decisions, rival contact and defeats, stage clear, stage scaling,
 technique ownership and the one-technique draft, Bomb Kick slides and blockers,
 Remote Detonation triggers, Piercing Blast rays, upgrade drafts and caps,
 scoring and multiplier rounding, run stats, profile defaults and malformed data,
-profile v2 migration and Run History validation, Run History cap and ordering,
-Daily Best transitions, the local date key and stable daily seed, daily-mode
-run determinism, persistence, and fixed-seed determinism.
+profile v3 validation, v2 and v1 migration, Run History cap and ordering, Daily
+Best transitions, Seed Code formatting and parsing across the 32-bit boundary,
+Share Link construction and removal, seed-mode run determinism, Run Mode labels,
+retry seeding, replay sessions, the local date key and stable daily seed,
+daily-mode run determinism, persistence, and fixed-seed determinism.
 
 Scenarios use small ASCII arena fixtures so each case reads as a maze:
 
