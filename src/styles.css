@@ -852,6 +852,32 @@ kbd {
   font-variant-numeric: tabular-nums;
 }
 
+.gameover-copy-status {
+  margin: 0;
+  max-width: 46ch;
+  color: var(--cyan);
+  font-size: 11px;
+  line-height: 1.5;
+  letter-spacing: 0.06em;
+  overflow-wrap: anywhere;
+}
+
+.gameover-share-link {
+  width: 100%;
+  padding: 10px 12px;
+  border: 2px solid #35507a;
+  background: #070d17;
+  color: var(--text);
+  font-family: "Courier New", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  text-align: left;
+}
+
+.gameover-share-link:focus-visible {
+  outline: 3px solid var(--amber);
+  outline-offset: 3px;
+}
+
 @keyframes stage-intro-in {
   from {
     opacity: 0;
@@ -1527,6 +1553,16 @@ html[data-high-contrast="true"] .record-row[data-mode="seed"] .record-badge {
 
 html[data-high-contrast="true"] .record-seed,
 html[data-high-contrast="true"] .gameover-seed {
+  color: #ffffff;
+}
+
+html[data-high-contrast="true"] .gameover-copy-status {
+  color: #ffffff;
+}
+
+html[data-high-contrast="true"] .gameover-share-link {
+  border-color: #d6f5ff;
+  background: #000000;
   color: #ffffff;
 }
 

@@ -277,9 +277,21 @@
                 <button id="retry-button" class="button button-primary" type="button">
                   Retry Run
                 </button>
+                <button id="copy-seed-link-button" class="button" type="button">
+                  Copy Seed Link
+                </button>
                 <button id="gameover-records-button" class="button" type="button">Records</button>
                 <button id="title-button" class="button" type="button">Title</button>
               </div>
+              <p id="gameover-copy-status" class="gameover-copy-status" role="status"></p>
+              <input
+                id="gameover-share-link"
+                class="gameover-share-link"
+                type="text"
+                readonly
+                aria-label="Share Link"
+                hidden
+              />
               <p class="controls-hint"><kbd>Tab</kbd> choose<span class="hint-sep">·</span><kbd>Enter</kbd> confirm</p>
             </div>
           </section>

@@ -33,7 +33,13 @@ import {
   saveProfile,
   updateSettings,
 } from './profile';
-import { formatSeed, parseSeedCode } from './seed';
+import {
+  buildShareLink,
+  formatSeed,
+  parseSeedCode,
+  parseShareLinkSeed,
+  removeSeedParam,
+} from './seed';
 import {
   gameOverModeLabel,
   type RunSession,
@@ -114,6 +120,9 @@ export function createGameApp(doc: Document): GameApp {
   const gameoverDailyDate = requireElement<HTMLElement>(doc, '#gameover-daily-date');
   const gameoverDailyBest = requireElement<HTMLElement>(doc, '#gameover-daily-best');
   const gameoverNewDailyBest = requireElement<HTMLElement>(doc, '#gameover-new-daily-best');
+  const gameoverCopyLinkButton = requireElement<HTMLButtonElement>(doc, '#copy-seed-link-button');
+  const gameoverCopyStatus = requireElement<HTMLElement>(doc, '#gameover-copy-status');
+  const gameoverShareLink = requireElement<HTMLInputElement>(doc, '#gameover-share-link');
   const titleBest = requireElement<HTMLElement>(doc, '#title-best');
   const titleDailyBest = requireElement<HTMLElement>(doc, '#title-daily-best');
   const titleLastRun = requireElement<HTMLElement>(doc, '#title-last-run');
@@ -148,6 +157,7 @@ export function createGameApp(doc: Document): GameApp {
   const seedScreen = requireElement<HTMLElement>(doc, '#seed-screen');
   const seedForm = requireElement<HTMLFormElement>(doc, '#seed-form');
   const seedInput = requireElement<HTMLInputElement>(doc, '#seed-input');
+  const seedStartButton = requireElement<HTMLButtonElement>(doc, '#seed-start-button');
   const seedError = requireElement<HTMLElement>(doc, '#seed-error');
   const seedBackButton = requireElement<HTMLButtonElement>(doc, '#seed-back-button');
   const playButton = requireElement<HTMLButtonElement>(doc, '#play-button');
@@ -372,7 +382,7 @@ export function createGameApp(doc: Document): GameApp {
     }
   }
 
-  function openSeedRun(prefill = ''): void {
+  function openSeedRun(prefill = '', focusStart = false): void {
     if (screen !== 'title') {
       return;
     }
@@ -381,9 +391,13 @@ export function createGameApp(doc: Document): GameApp {
     seedScreen.hidden = false;
     seedInput.value = prefill;
     clearSeedError();
-    seedInput.focus({ preventScroll: true });
-    if (prefill.length > 0) {
-      seedInput.select();
+    if (focusStart) {
+      seedStartButton.focus({ preventScroll: true });
+    } else {
+      seedInput.focus({ preventScroll: true });
+      if (prefill.length > 0) {
+        seedInput.select();
+      }
     }
   }
 
@@ -437,6 +451,35 @@ export function createGameApp(doc: Document): GameApp {
     seedError.hidden = true;
     seedError.textContent = '';
     seedInput.removeAttribute('aria-invalid');
+  }
+
+  /**
+   * Consumes a `?seed=` deep link after the title has loaded. A valid Seed
+   * opens the Seed Run setup but never starts a run; the parameter is then
+   * removed from the address bar so a refresh cannot replay it by surprise.
+   */
+  function consumeShareLink(): void {
+    let href: string;
+    try {
+      href = win.location.href;
+    } catch {
+      return;
+    }
+
+    const seed = parseShareLinkSeed(href);
+    if (seed !== null) {
+      openSeedRun(formatSeed(seed), true);
+    }
+
+    const cleaned = removeSeedParam(href);
+    if (cleaned === href) {
+      return;
+    }
+    try {
+      win.history.replaceState(null, '', cleaned);
+    } catch {
+      // A sandboxed frame or blocked History API must not stop the game.
+    }
   }
 
   function renderRecords(): void {
@@ -617,6 +660,7 @@ export function createGameApp(doc: Document): GameApp {
     gameoverNewBest.hidden = true;
     gameoverNewDailyBest.hidden = true;
     gameoverDaily.hidden = true;
+    resetShareLinkUi();
     screen = 'playing';
     titleScreen.hidden = true;
     pauseScreen.hidden = true;
@@ -794,7 +838,71 @@ export function createGameApp(doc: Document): GameApp {
     canvas.focus({ preventScroll: true });
   }
 
+  function resetShareLinkUi(): void {
+    setText(gameoverCopyStatus, '');
+    gameoverShareLink.value = '';
+    gameoverShareLink.hidden = true;
+  }
+
+  function announceShareStatus(message: string): void {
+    // Clearing first re-announces the live region when the same message repeats.
+    gameoverCopyStatus.textContent = '';
+    gameoverCopyStatus.textContent = message;
+  }
+
+  function showShareLinkCopied(): void {
+    gameoverShareLink.value = '';
+    gameoverShareLink.hidden = true;
+    announceShareStatus('Share Link copied to the clipboard.');
+  }
+
+  function showShareLinkFallback(link: string): void {
+    gameoverShareLink.value = link;
+    gameoverShareLink.hidden = false;
+    announceShareStatus('Clipboard unavailable. Select the Share Link and copy it manually.');
+    gameoverShareLink.focus({ preventScroll: true });
+    gameoverShareLink.select();
+  }
+
+  function copySeedLink(): void {
+    let link: string;
+    try {
+      link = buildShareLink(win.location.href, run.getState().seed);
+    } catch {
+      announceShareStatus('Could not build a Share Link.');
+      return;
+    }
+
+    const fallback = (): void => {
+      if (screen === 'gameover') {
+        showShareLinkFallback(link);
+      }
+    };
+
+    let clipboard: Clipboard | undefined;
+    try {
+      clipboard = win.navigator.clipboard;
+    } catch {
+      clipboard = undefined;
+    }
+    if (clipboard === undefined || typeof clipboard.writeText !== 'function') {
+      fallback();
+      return;
+    }
+
+    try {
+      void clipboard.writeText(link).then(() => {
+        if (screen === 'gameover') {
+          showShareLinkCopied();
+        }
+      }, fallback);
+    } catch {
+      fallback();
+    }
+  }
+
   function showGameOver(state: RunState, recorded?: RunRecordOutcome): void {
+    resetShareLinkUi();
     screen = 'gameover';
     gameoverScreen.hidden = false;
     intermissionScreen.hidden = true;
@@ -951,7 +1059,9 @@ export function createGameApp(doc: Document): GameApp {
     }
     const focusable = Array.from(
       container.querySelectorAll<HTMLElement>('button, input, [tabindex]:not([tabindex="-1"])'),
-    ).filter((element) => !element.hasAttribute('disabled'));
+    ).filter(
+      (element) => !element.hasAttribute('disabled') && element.closest('[hidden]') === null,
+    );
     if (focusable.length === 0) {
       return;
     }
@@ -1073,6 +1183,7 @@ export function createGameApp(doc: Document): GameApp {
   pauseSettingsButton.addEventListener('click', () => openSettings('paused'));
   settingsBackButton.addEventListener('click', closeSettings);
   recordsButton.addEventListener('click', () => openRecords('title'));
+  gameoverCopyLinkButton.addEventListener('click', copySeedLink);
   gameoverRecordsButton.addEventListener('click', () => openRecords('gameover'));
   recordsBackButton.addEventListener('click', closeRecords);
   seedForm.addEventListener('submit', (event) => {
@@ -1303,6 +1414,7 @@ export function createGameApp(doc: Document): GameApp {
       fitCanvas();
       updateHud();
       playButton.focus();
+      consumeShareLink();
       lastFrameTime = win.performance.now();
       win.requestAnimationFrame(frame);
     },
