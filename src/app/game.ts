@@ -34,7 +34,13 @@ import {
   updateSettings,
 } from './profile';
 import { formatSeed, parseSeedCode } from './seed';
-import { gameOverModeLabel, type RunSession, retrySeed, stageIntroModeLabel } from './session';
+import {
+  gameOverModeLabel,
+  type RunSession,
+  replaySessionFor,
+  retrySeed,
+  stageIntroModeLabel,
+} from './session';
 
 type ScreenState =
   | 'title'
@@ -410,6 +416,14 @@ export function createGameApp(doc: Document): GameApp {
     beginRun(createRun(seed), { mode: 'seed', seed });
   }
 
+  function replayRunRecord(record: RunRecord): void {
+    const session = replaySessionFor(record);
+    if (session === null) {
+      return;
+    }
+    beginRun(createRun(session.seed), session);
+  }
+
   function showSeedError(): void {
     seedInput.setAttribute('aria-invalid', 'true');
     // Replacing the text re-announces the alert when the same invalid code is
@@ -493,10 +507,22 @@ export function createGameApp(doc: Document): GameApp {
     row.append(head, stage);
 
     if (record.seed !== null) {
+      const seedLine = doc.createElement('div');
+      seedLine.className = 'record-seed-line';
+
       const seed = doc.createElement('p');
       seed.className = 'record-seed';
       seed.textContent = `Seed · ${formatSeed(record.seed)}`;
-      row.append(seed);
+
+      const replay = doc.createElement('button');
+      replay.type = 'button';
+      replay.className = 'button record-replay';
+      replay.textContent = 'Replay seed';
+      replay.setAttribute('aria-label', `Replay seed ${formatSeed(record.seed)}`);
+      replay.addEventListener('click', () => replayRunRecord(record));
+
+      seedLine.append(seed, replay);
+      row.append(seedLine);
     }
 
     row.append(stats);
