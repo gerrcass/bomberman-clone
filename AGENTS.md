@@ -12,7 +12,7 @@ Bomb Blitz is a browser Bomberman clone: a single-player, endless arena run of m
 - **Tracker, domain, and triage rules**: `docs/agents/`.
 - **Browser checks**: `docs/agents/browser-verification.md` before reporting presentation work done.
 
-The original build (#2–#9), the bomb-techniques slice (#11–#15), the run-records slice (#17–#21), and the seed-runs slice (#23–#28) are complete and deployed. The umbrella spec #1 is closed; treat those closed tickets and the ADRs as precedent for new work. New scope starts from a new spec issue.
+Slice history and ticket flow live in `docs/agents/workflow.md`.
 
 ## Workflow
 
@@ -77,6 +77,8 @@ npm run check      # lint + typecheck + test + build
 - Profile v3 (`bomb-blitz.profile.v3`) is authoritative once present. v2 is read once when v3 is absent; v1 is read only when both are absent. Migrated records have no Seed and offer no replay. The migration is one-way, old keys are never written, and a malformed v3 falls back to defaults rather than resurrecting v2 or v1.
 - Every new Run Record stores its Seed. A Seed Run is a Run Mode, not a gameplay modifier; the simulation still receives only a Seed and never learns the mode, date, Seed Code, or Share Link.
 - A Seed Code is uppercase base36, 1–7 significant characters, and maps to an unsigned 32-bit Seed. The same Seed reproduces arenas and draft offers, not the player's inputs.
+- Biome's `useLiteralKeys` rule is off repo-wide because `noPropertyAccessFromIndexSignature` requires bracket access for index signatures. `npm run lint` is clean at zero warnings; do not re-enable the rule without changing that compiler rule.
+- `src/styles.css` deliberately disables `noImportantStyles` and `noDescendingSpecificity` for accessibility overrides and existing selector order. Keep the lint baseline at zero warnings; fix new findings instead of adding suppressions.
 - A Share Link carries `?seed=<Seed Code>` and opens the Seed Run setup with Start focused; it never auto-starts. The `seed` parameter is removed after it is consumed, and an invalid value is ignored.
 - Run History is local, newest-first, and capped at 20. A finished run records once; a daily run also updates the current date's Daily Best.
 

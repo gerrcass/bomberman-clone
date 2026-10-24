@@ -12,13 +12,16 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:smoke": "npm run build && playwright test",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "format": "biome check --write .",
-    "check": "npm run lint && npm run typecheck && npm run test && npm run build"
+    "check:docs": "node scripts/check-docs-assets.mjs",
+    "check": "npm run check:docs && npm run lint && npm run typecheck && npm run test && npm run build"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
+    "@playwright/test": "^1.64.1",
     "typescript": "7.0.2",
     "vite": "8.3.4",
     "vitest": "5.0.5"

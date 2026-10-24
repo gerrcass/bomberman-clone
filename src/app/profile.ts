@@ -108,6 +108,8 @@ export function loadProfile(storage: StorageLike | null): Profile {
 /** Parses the authoritative v3 value. A malformed v3 never rereads v2 or v1. */
 function parseProfileV3(raw: string): Profile {
   const record = parseObject(raw);
+  // `noPropertyAccessFromIndexSignature` requires bracket access for unknown
+  // fields; Biome turns off useLiteralKeys repo-wide for that reason.
   if (record === null || record['version'] !== 3) {
     return DEFAULT_PROFILE;
   }
