@@ -5,14 +5,14 @@ Bomb Blitz is a browser Bomberman clone: a single-player, endless arena run of m
 ## Start here
 
 - **Live game**: https://gerrcass.github.io/bomberman-clone/
-- **Spec**: [issue #1](https://github.com/gerrcass/bomberman-clone/issues/1) is the source of truth for rules, balance, scope, and testing. The latest completed slice is #17, **Run records and the Daily Run**. The active slice is #23, **Seed Runs and Share Links**, with tickets #24–#28.
+- **Spec**: [issue #1](https://github.com/gerrcass/bomberman-clone/issues/1) is the source of truth for rules, balance, scope, and testing. The latest completed slice is #17, **Run records and the Daily Run**. The active slice is #23, **Seed Runs and Share Links** (tickets #24–#28): #24–#27 are closed, and the feature is implemented on `slice/seed-runs` awaiting its integration PR merge.
 - **Tickets**: `gh issue list --state open --json number,title,blockedBy` describes the task graph. Work only the frontier: a ticket whose blockers are all closed.
 - **Vocabulary**: `GLOSSARY.md`. Use its terms in code, tests, tickets, and comments.
 - **Decisions**: `docs/adr/`. Read the ADRs that touch the area before changing it; surface conflicts rather than silently overriding them.
 - **Tracker, domain, and triage rules**: `docs/agents/`.
 - **Browser checks**: `docs/agents/browser-verification.md` before reporting presentation work done.
 
-The original build (#2–#9), the bomb-techniques slice (#11–#15), and the run-records slice (#17–#21) are complete and deployed. Treat those closed tickets and the ADRs as precedent for new work. Leave #1 open as the umbrella spec.
+The original build (#2–#9), the bomb-techniques slice (#11–#15), and the run-records slice (#17–#21) are complete and deployed. The Seed Runs and Share Links implementation (#24–#27) is complete and awaits the slice PR. Treat those closed tickets and the ADRs as precedent for new work. Leave #1 open as the umbrella spec.
 
 ## Workflow
 
@@ -33,7 +33,7 @@ One agent owns a worktree at a time. Before committing or merging, run `git stat
 - `src/game/` — deterministic simulation and run rules. No DOM, Canvas, or Web Audio imports. Fixed 1/60-second ticks; seeded randomness; the public simulation/run API is the test seam.
 - `src/render/` — Canvas renderer, sprites, and effects. Reads state and events; never mutates gameplay.
 - `src/audio/` — synthesized Web Audio. Reads events and settings.
-- `src/app/` — browser shell: loop, input, screens, persistence, and UI wiring.
+- `src/app/` — browser shell: loop, input, screens, persistence, and UI wiring. `seed.ts` owns Seed Codes and Share Links, `session.ts` owns Run Mode labels/retry/replay, and both stay pure where possible.
 - Tests live beside game modules and use ASCII arena fixtures.
 
 See `docs/agents/architecture.md` for module ownership and invariants.
@@ -55,7 +55,7 @@ npm run check      # lint + typecheck + test + build
 
 ## Conventions
 
-- Speak the glossary: **Bomber**, **Rival**, **Tile**, **Blast**, **Stage**, **Run**, **Endless Run**, **Daily Run**, **Run Record**, **Run History**, **Intermission**, **Upgrade**, **Technique**.
+- Speak the glossary: **Bomber**, **Rival**, **Tile**, **Blast**, **Stage**, **Run**, **Endless Run**, **Daily Run**, **Seed Run**, **Seed Code**, **Share Link**, **Run Mode**, **Run Record**, **Run History**, **Intermission**, **Upgrade**, **Technique**.
 - Every gameplay change needs a test at the simulation or run seam. Renderer tests are not a substitute.
 - Gameplay randomness comes from the seeded generator. `Math.random()` stays out of `src/game/`. A Daily Run seed comes from the pure local-date helper, not from the wall clock inside the simulation.
 - Nothing is fetched at runtime. Art is generated from pixel matrices, audio is synthesized, and only a bundled display font is packaged.
@@ -74,10 +74,10 @@ npm run check      # lint + typecheck + test + build
 - Losing the last life ends the run even if the last rival dies in the same tick.
 - The game auto-pauses when the document becomes hidden and resumes paused.
 - Walls stop blast rays without producing a blast tile.
-- Profile v2 is authoritative once present. The v1 key is a read-only migration source; a malformed v2 falls back to defaults rather than resurrecting v1.
-- Profile v3 is authoritative once present. v2 is read once when v3 is absent; v1 is read only when both are absent. Migrated records have no Seed and offer no replay. Old keys are never written.
+- Profile v3 (`bomb-blitz.profile.v3`) is authoritative once present. v2 is read once when v3 is absent; v1 is read only when both are absent. Migrated records have no Seed and offer no replay. The migration is one-way, old keys are never written, and a malformed v3 falls back to defaults rather than resurrecting v2 or v1.
 - Every new Run Record stores its Seed. A Seed Run is a Run Mode, not a gameplay modifier; the simulation still receives only a Seed and never learns the mode, date, Seed Code, or Share Link.
-- A Seed Code is uppercase base36, 1–7 characters, and maps to an unsigned 32-bit Seed. The same Seed reproduces arenas and draft offers, not the player's inputs.
+- A Seed Code is uppercase base36, 1–7 significant characters, and maps to an unsigned 32-bit Seed. The same Seed reproduces arenas and draft offers, not the player's inputs.
+- A Share Link carries `?seed=<Seed Code>` and opens the Seed Run setup with Start focused; it never auto-starts. The `seed` parameter is removed after it is consumed, and an invalid value is ignored.
 - Run History is local, newest-first, and capped at 20. A finished run records once; a daily run also updates the current date's Daily Best.
 
 ## Quality bar
