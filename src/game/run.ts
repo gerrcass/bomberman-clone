@@ -52,7 +52,7 @@ export interface RunOptions {
    * the first always use the run's seeded arena.
    */
   readonly firstStage?: Partial<
-    Pick<StageOptions, 'arena' | 'rivalCount' | 'rivalSpawns' | 'fuseMs' | 'blastRange'>
+    Pick<StageOptions, 'arena' | 'rivalCount' | 'rivalSpawns' | 'fuseMs' | 'blastRange' | 'theme'>
   >;
   /**
    * Techniques the player starts the run with. Test and dev-harness seam; the

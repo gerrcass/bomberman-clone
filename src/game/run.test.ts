@@ -248,6 +248,19 @@ describe('stage themes in a run', () => {
     expect(after.stageState.theme).not.toBe('pillar-hall');
   });
 
+  it('honours a first-stage theme override for fixtures and the dev harness', () => {
+    const run = createRun(77, {
+      firstStage: {
+        arena: CLEARABLE,
+        rivalCount: 0,
+        theme: 'twin-courts',
+      },
+    });
+
+    expect(run.getState().stageState.theme).toBe('twin-courts');
+    expect(run.getState().stageState.theme).not.toBe(themeForStage(77, 1));
+  });
+
   it('reproduces the stage 2 theme for the same seed', () => {
     const first = clearFirstStage(2024);
     const second = clearFirstStage(2024);
