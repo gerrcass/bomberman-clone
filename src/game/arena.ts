@@ -1,12 +1,9 @@
 import { createRng, shuffle } from './rng';
-import { type StageThemeId, themeDefinition } from './themes';
+import { DEFAULT_STAGE_THEME, type StageThemeId, themeDefinition } from './themes';
 import type { ArenaState, TileCoord, TileKind } from './types';
 
 export const ARENA_WIDTH = 15;
 export const ARENA_HEIGHT = 13;
-
-/** Fraction of eligible interior tiles covered by bricks in Pillar Hall. */
-export const BRICK_DENSITY = themeDefinition('pillar-hall').brickDensity;
 
 /** Bottom-left spawn corner used by the player. */
 export const PLAYER_SPAWN: TileCoord = { x: 1, y: 11 };
@@ -67,7 +64,7 @@ export function isPillar(x: number, y: number): boolean {
  * their orthogonal interior neighbours stay clear. Pillar Hall, the default,
  * preserves the classic even/even lattice and 58% density.
  */
-export function generateArena(seed: number, theme: StageThemeId = 'pillar-hall'): ArenaState {
+export function generateArena(seed: number, theme: StageThemeId = DEFAULT_STAGE_THEME): ArenaState {
   const definition = themeDefinition(theme);
   const tiles: TileKind[] = new Array(ARENA_WIDTH * ARENA_HEIGHT).fill('floor');
 

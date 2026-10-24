@@ -33,8 +33,10 @@ export function themeDefinition(id: StageThemeId): StageThemeDefinition {
   return STAGE_THEME_DEFINITIONS[id];
 }
 
+/** Default Stage Theme, used whenever no theme is supplied explicitly. */
+export const DEFAULT_STAGE_THEME: StageThemeId = 'pillar-hall';
+
 const CYCLE_LENGTH = 4;
-const PILLAR_HALL: StageThemeId = 'pillar-hall';
 const CYCLE_THEMES: readonly StageThemeId[] = ['brickworks', 'crossroads', 'twin-courts'];
 
 /**
@@ -54,10 +56,10 @@ export function themeForStage(runSeed: number, stage: number): StageThemeId {
   const position = (normalizedStage - 1) % CYCLE_LENGTH;
 
   if (position === 0) {
-    return PILLAR_HALL;
+    return DEFAULT_STAGE_THEME;
   }
 
-  return themeOrderForCycle(runSeed, cycle)[position - 1] ?? PILLAR_HALL;
+  return themeOrderForCycle(runSeed, cycle)[position - 1] ?? DEFAULT_STAGE_THEME;
 }
 
 function themeOrderForCycle(runSeed: number, cycle: number): readonly StageThemeId[] {

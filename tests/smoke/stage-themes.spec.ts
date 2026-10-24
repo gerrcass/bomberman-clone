@@ -1,8 +1,7 @@
 import { expect, test } from '@playwright/test';
+import { STAGE_THEMES, type StageThemeId } from '../../src/game/themes';
 
 const devUrl = 'http://localhost:5174';
-
-type StageThemeId = 'pillar-hall' | 'brickworks' | 'crossroads' | 'twin-courts';
 
 type DebugWindow = Window & {
   __bombBlitzDebug?: {
@@ -10,13 +9,6 @@ type DebugWindow = Window & {
     forceRunOver(): void;
   };
 };
-
-const THEMES = [
-  { id: 'pillar-hall', name: 'Pillar Hall' },
-  { id: 'brickworks', name: 'Brickworks' },
-  { id: 'crossroads', name: 'Crossroads' },
-  { id: 'twin-courts', name: 'Twin Courts' },
-] as const satisfies ReadonlyArray<{ id: StageThemeId; name: string }>;
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
@@ -39,7 +31,7 @@ test('names Pillar Hall on the Stage 1 intro and marks the shell', async ({ page
 test.describe('dev harness theme runs', () => {
   test.use({ baseURL: devUrl });
 
-  for (const theme of THEMES) {
+  for (const theme of STAGE_THEMES) {
     test(`starts Stage 1 in ${theme.name}`, async ({ page }) => {
       await page.evaluate((id) => {
         (window as DebugWindow).__bombBlitzDebug?.startThemeRun(id);

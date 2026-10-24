@@ -40,9 +40,9 @@ describe('Stage Theme terrain palettes', () => {
         expect(palette.brick[glyph], `${id} brick ${glyph}`).toMatch(HEX_COLOUR);
       }
 
-      expect(palette.debris, `${id} debris`).toHaveLength(2);
-      for (const colour of palette.debris) {
-        expect(colour).toMatch(HEX_COLOUR);
+      expect(palette.debris.highlight, `${id} debris highlight`).toMatch(HEX_COLOUR);
+      expect(palette.debris.body, `${id} debris body`).toMatch(HEX_COLOUR);
+      for (const colour of [palette.debris.highlight, palette.debris.body]) {
         expect(Object.values(palette.brick)).toContain(colour);
       }
     }
@@ -59,7 +59,10 @@ describe('Stage Theme terrain palettes', () => {
       expect(new Set(signatures).size, `${kind} palettes`).toBe(STAGE_THEME_IDS.length);
     }
 
-    const debris = STAGE_THEME_IDS.map((id) => terrainPalette(id).debris.join(','));
+    const debris = STAGE_THEME_IDS.map((id) => {
+      const { highlight, body } = terrainPalette(id).debris;
+      return `${highlight},${body}`;
+    });
     expect(new Set(debris).size).toBe(STAGE_THEME_IDS.length);
   });
 

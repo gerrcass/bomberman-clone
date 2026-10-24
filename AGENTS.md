@@ -5,7 +5,7 @@ Bomb Blitz is a browser Bomberman clone: a single-player, endless arena run of m
 ## Start here
 
 - **Live game**: https://gerrcass.github.io/bomberman-clone/
-- **Spec**: [issue #1](https://github.com/gerrcass/bomberman-clone/issues/1) is the closed umbrella spec and remains the source of truth for the original rules, balance, scope, and testing. The latest completed slice is #23, **Seed Runs and Share Links** (tickets #24–#28), which added Seed Runs, Seed Codes, Replay seed, and Share Links. New work starts from a new spec issue.
+- **Spec**: [issue #1](https://github.com/gerrcass/bomberman-clone/issues/1) is the closed umbrella spec and remains the source of truth for the original rules, balance, scope, and testing. New work starts from a new spec issue.
 - **Tickets**: `gh issue list --state open --json number,title,blockedBy` describes the task graph. Work only the frontier: a ticket whose blockers are all closed.
 - **Vocabulary**: `GLOSSARY.md`. Use its terms in code, tests, tickets, and comments.
 - **Decisions**: `docs/adr/`. Read the ADRs that touch the area before changing it; surface conflicts rather than silently overriding them.
@@ -77,7 +77,7 @@ npm run check      # lint + typecheck + test + build
 - Walls stop blast rays without producing a blast tile.
 - Profile v3 (`bomb-blitz.profile.v3`) is authoritative once present. v2 is read once when v3 is absent; v1 is read only when both are absent. Migrated records have no Seed and offer no replay. The migration is one-way, old keys are never written, and a malformed v3 falls back to defaults rather than resurrecting v2 or v1.
 - Every new Run Record stores its Seed. A Seed Run is a Run Mode, not a gameplay modifier; the simulation still receives only a Seed and never learns the mode, date, Seed Code, or Share Link.
-- A Seed Code is uppercase base36, 1–7 significant characters, and maps to an unsigned 32-bit Seed. The same Seed reproduces arenas and draft offers, not the player's inputs.
+- A Seed Code is uppercase base36, 1–7 significant characters, and maps to an unsigned 32-bit Seed. The same Seed reproduces arenas, Stage Themes, and draft offers, not the player's inputs.
 - Biome's `useLiteralKeys` rule is off repo-wide because `noPropertyAccessFromIndexSignature` requires bracket access for index signatures. `npm run lint` is clean at zero warnings; do not re-enable the rule without changing that compiler rule.
 - `src/styles.css` deliberately disables `noImportantStyles` and `noDescendingSpecificity` for accessibility overrides and existing selector order. Keep the lint baseline at zero warnings; fix new findings instead of adding suppressions.
 - A Stage Theme is a pure function of the Seed and stage number: Stage 1 and every cycle opener (1, 5, 9, …) are Pillar Hall, and the other three rotate per cycle. Themes change terrain and palette only; layout walls stay 180° symmetric, every non-wall tile reachable, and the renderer owns palettes.

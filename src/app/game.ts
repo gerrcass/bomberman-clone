@@ -2,6 +2,7 @@ import { createAudio } from '../audio/audio';
 import {
   createRun,
   createStage,
+  DEFAULT_STAGE_THEME,
   INITIAL_TECHNIQUES,
   isTechniqueId,
   ownedTechniqueIds,
@@ -198,7 +199,6 @@ export function createGameApp(doc: Document): GameApp {
   let recordsReturn: 'title' | 'gameover' = 'title';
   let quitArmed = false;
   let quitTimer: number | null = null;
-  let shellTheme: StageThemeId = 'pillar-hall';
 
   applySettings();
   syncSettingsInputs();
@@ -233,10 +233,9 @@ export function createGameApp(doc: Document): GameApp {
 
   /** The shell accent follows the backdrop the player can see. */
   function syncShellTheme(theme: StageThemeId): void {
-    if (shellTheme === theme) {
+    if (shell.dataset['theme'] === theme) {
       return;
     }
-    shellTheme = theme;
     shell.dataset['theme'] = theme;
   }
 
@@ -1289,7 +1288,7 @@ export function createGameApp(doc: Document): GameApp {
           { mode: 'endless' },
         );
       },
-      startThemeRun(theme: StageThemeId = 'pillar-hall'): void {
+      startThemeRun(theme: StageThemeId = DEFAULT_STAGE_THEME): void {
         beginRun(createRun(TITLE_SEED, { firstStage: { theme } }), { mode: 'endless' });
       },
       startKickRun(): void {
