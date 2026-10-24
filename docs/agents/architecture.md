@@ -6,7 +6,9 @@ The game is split so that parallel work can land without fighting over the same 
 
 | Area | Owns | May import |
 | --- | --- | --- |
-| `src/game/` | Arena generation, seeded RNG, movement, bombs, blasts, pickups, rival AI, run rules, scoring, upgrades | Game modules only; no DOM, Canvas, or Web Audio |
+| `src/game/` | Arena generation, seeded RNG, Stage Theme definitions and selection, movement, bombs, blasts, pickups, rival AI, run rules, scoring, upgrades | Game modules only; no DOM, Canvas, or Web Audio |
+| `src/game/themes.ts` | Stage Theme IDs, display names, brick densities, and the seeded four-Stage theme cycle | RNG only; no arena, renderer, app, or clock |
+| `src/game/arena.ts` | Per-theme wall layouts, brick density, spawn protection, and connectivity invariants | Theme definitions and game types |
 | `src/render/` | Sprite generation, Canvas drawing, particles, screen shake | `src/game` types and read-only state |
 | `src/audio/` | Synthesized SFX, music loop, audio unlock | `src/game` event types |
 | `src/app/` | Fixed-timestep loop, keyboard input, screen state, DOM UI, persistence, daily date/seed, wiring | Everything |
@@ -22,7 +24,10 @@ The game is split so that parallel work can land without fighting over the same 
 - Bombers move on a grid with smooth interpolation. Walls, bricks, and bombs block entry; bombers pass through each other.
 - A moving rival is treated as occupying `movement.to`. If a live blast appears under that destination, the rival reverses instead of finishing the step.
 - Blast rays stop at walls and after destroying one brick, unless the bomb is piercing; they chain-detonate bombs in the same tick, last 450 ms, and spare revealed power-ups.
-- A run carries lives, score, stage, upgrades, and techniques; a stage carries the arena, bombers, bombs, blasts, pickups, AI state, and the player's techniques.
+- A run carries lives, score, stage, upgrades, and techniques; a stage carries the arena, theme, bombers, bombs, blasts, pickups, AI state, and the player's techniques.
+- A Stage Theme is chosen by a pure function of the run Seed and stage number. Stage 1 and the first Stage of every four-Stage cycle are Pillar Hall; the other three positions are a seeded permutation of the remaining themes. No clock, Run Mode, profile, or browser state participates.
+- A Stage Theme changes terrain layout and palette only. Every theme keeps the border solid, all four spawn corners and their orthogonal interior neighbours clear, every non-wall tile reachable from the player spawn once bricks are cleared, layout walls 180° rotationally symmetric, per-theme brick density, and the hidden power-up guarantee.
+- The simulation exposes a theme ID and never a colour. The renderer owns the terrain palettes and keeps actor, bomb, blast, and power-up colours fixed; the app owns display names and the intro accent.
 - A bomb captures the techniques that affect it — pierce and remote eligibility — at placement. Kick applies when the player walks into a resting bomb. All techniques belong to the player; rivals always use classic bombs.
 - A finished Run records exactly once: Run History is newest-first and capped at 20. A Daily Run also updates the current date's Daily Best; every finished Run updates all-time bests and runs played.
 - A Daily Run seed derives from a pure local-date key. A Seed Run seed comes from a Seed Code. The simulation receives only the Seed: it never learns the Run Mode, date, Seed Code, or Share Link, and midnight passing mid-run does not change the captured seed.
@@ -32,7 +37,8 @@ The game is split so that parallel work can land without fighting over the same 
 
 ## Gameplay seams
 
-- `src/game/run.ts` owns the endless loop: lives, score, stage advancement, intermission state, and run statistics.
+- `src/game/run.ts` owns the endless loop: lives, score, stage advancement, theme selection, intermission state, and run statistics.
+- `src/game/themes.ts` owns the Stage Theme vocabulary and the pure `themeForStage(seed, stage)` cycle. `src/game/arena.ts` owns the per-theme wall pattern, density, spawn protection, and connectivity invariants.
 - `src/game/ai.ts` owns danger maps, escape paths, and rival decisions. Its decisions must use the rival's destination tile (`movement.to`) when a step is in progress.
 - `src/game/techniques.ts` owns technique definitions, ownership, and caps. At most one unowned technique occupies a draft slot.
 - `src/game/upgrades.ts` owns the draft pool, stat caps, and stat derivation.

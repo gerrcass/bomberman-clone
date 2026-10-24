@@ -126,6 +126,10 @@ _Avoid_: Game type, challenge type
 One arena encounter, cleared by defeating every rival.
 _Avoid_: Round, level, wave
 
+**Stage Theme**:
+The arena layout and terrain palette that give a Stage its identity. A Stage Theme changes terrain, never the run rules.
+_Avoid_: Biome, zone, level skin, map type
+
 **Intermission**:
 The between-stage screen where the player chooses one upgrade.
 _Avoid_: Shop, draft screen, between-level

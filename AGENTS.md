@@ -80,6 +80,7 @@ npm run check      # lint + typecheck + test + build
 - A Seed Code is uppercase base36, 1–7 significant characters, and maps to an unsigned 32-bit Seed. The same Seed reproduces arenas and draft offers, not the player's inputs.
 - Biome's `useLiteralKeys` rule is off repo-wide because `noPropertyAccessFromIndexSignature` requires bracket access for index signatures. `npm run lint` is clean at zero warnings; do not re-enable the rule without changing that compiler rule.
 - `src/styles.css` deliberately disables `noImportantStyles` and `noDescendingSpecificity` for accessibility overrides and existing selector order. Keep the lint baseline at zero warnings; fix new findings instead of adding suppressions.
+- A Stage Theme is a pure function of the Seed and stage number: Stage 1 and every fourth Stage are Pillar Hall, and the other three rotate per cycle. Themes change terrain and palette only; layout walls stay 180° symmetric, every non-wall tile reachable, and the renderer owns palettes.
 - A Share Link carries `?seed=<Seed Code>` and opens the Seed Run setup with Start focused; it never auto-starts. The `seed` parameter is removed after it is consumed, and an invalid value is ignored.
 - Run History is local, newest-first, and capped at 20. A finished run records once; a daily run also updates the current date's Daily Best.
 
