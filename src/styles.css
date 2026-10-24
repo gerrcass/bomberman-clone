@@ -1568,3 +1568,146 @@ html[data-high-contrast="true"] .gameover-daily-score {
     padding: 6px 8px;
   }
 }
+
+/* Seed Run ------------------------------------------------------------- */
+
+.seed-screen {
+  background: rgba(3, 6, 11, 0.86);
+}
+
+.seed-panel {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  width: min(520px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  padding: 24px 28px;
+  border: 2px solid var(--panel-edge);
+  background: linear-gradient(180deg, #111c2f, #0a101b);
+  box-shadow:
+    0 0 0 1px #05070d,
+    0 18px 48px rgba(0, 0, 0, 0.6);
+}
+
+.seed-help {
+  margin: 0;
+  max-width: 46ch;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.seed-form {
+  display: grid;
+  gap: 10px;
+  justify-items: stretch;
+  width: 100%;
+  text-align: left;
+}
+
+.seed-label {
+  color: var(--cyan);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.seed-input {
+  width: 100%;
+  padding: 14px 16px;
+  border: 2px solid #35507a;
+  background: #070d17;
+  color: var(--text);
+  font-family: var(--display-font);
+  font-size: 18px;
+  letter-spacing: 0.2em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.seed-input::placeholder {
+  color: #6d819f;
+  opacity: 1;
+  letter-spacing: 0.12em;
+}
+
+.seed-input:focus-visible {
+  outline: 3px solid var(--amber);
+  outline-offset: 3px;
+}
+
+.seed-input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.seed-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.seed-form .button,
+.seed-panel > .button {
+  width: 100%;
+}
+
+html[data-high-contrast="true"] .seed-panel {
+  border-color: #b9ecff;
+}
+
+html[data-high-contrast="true"] .seed-label {
+  color: #ffe89a;
+}
+
+html[data-high-contrast="true"] .seed-input {
+  border-color: #d6f5ff;
+  background: #000000;
+  color: #ffffff;
+}
+
+html[data-high-contrast="true"] .seed-input::placeholder {
+  color: #cfe2f7;
+}
+
+html[data-high-contrast="true"] .seed-error {
+  color: #ff9a9a;
+}
+
+html[data-high-contrast="true"] .seed-input[aria-invalid="true"] {
+  border-color: #ff9a9a;
+}
+
+@media (max-width: 640px) {
+  .seed-panel {
+    padding: 18px 14px;
+  }
+
+  .seed-input {
+    font-size: 16px;
+    letter-spacing: 0.14em;
+  }
+}
+
+@media (max-height: 720px) {
+  .seed-screen {
+    padding: 14px;
+  }
+
+  .seed-panel {
+    gap: 10px;
+    padding: 14px 18px;
+  }
+
+  .seed-help {
+    font-size: 11px;
+    line-height: 1.45;
+  }
+
+  .seed-input {
+    padding: 10px 12px;
+    font-size: 15px;
+  }
+}

@@ -28,6 +28,44 @@ const DIRECTION_KEYS: Readonly<Record<string, Direction>> = {
   d: 'right',
 };
 
+const TEXT_INPUT_TYPES: ReadonlySet<string> = new Set([
+  'text',
+  'search',
+  'email',
+  'url',
+  'tel',
+  'password',
+  'number',
+]);
+
+/**
+ * True when the key event targets a text field. The browser owns those
+ * keystrokes: treating `p` as pause would make a Seed Code impossible to type.
+ * Duck typing keeps the check usable in the Node test environment.
+ */
+function isTextEntryTarget(target: EventTarget | null): boolean {
+  if (target === null || typeof target !== 'object') {
+    return false;
+  }
+  const element = target as { tagName?: unknown; isContentEditable?: unknown; type?: unknown };
+  if (element.isContentEditable === true) {
+    return true;
+  }
+  if (typeof element.tagName !== 'string') {
+    return false;
+  }
+  const tagName = element.tagName.toUpperCase();
+  if (tagName === 'TEXTAREA' || tagName === 'SELECT') {
+    return true;
+  }
+  if (tagName !== 'INPUT') {
+    return false;
+  }
+  // Checkboxes and radios must keep the existing Escape/P behavior; only text
+  // entry owns the letter keys.
+  return typeof element.type !== 'string' || TEXT_INPUT_TYPES.has(element.type.toLowerCase());
+}
+
 /**
  * Keyboard input for the browser shell. The newest held direction wins, which
  * makes switching corners feel immediate while the simulation still buffers
@@ -61,6 +99,10 @@ export function createInput(win: Window, actions: InputActions): InputController
   }
 
   function onKeyDown(event: KeyboardEvent): void {
+    if (isTextEntryTarget(event.target)) {
+      return;
+    }
+
     if (event.altKey || event.ctrlKey || event.metaKey) {
       return;
     }
