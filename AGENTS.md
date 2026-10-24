@@ -5,14 +5,14 @@ Bomb Blitz is a browser Bomberman clone: a single-player, endless arena run of m
 ## Start here
 
 - **Live game**: https://gerrcass.github.io/bomberman-clone/
-- **Spec**: [issue #1](https://github.com/gerrcass/bomberman-clone/issues/1) is the source of truth for rules, balance, scope, and testing. The newest slice spec is #17, **Run records and the Daily Run**, with tickets #18–#21.
+- **Spec**: [issue #1](https://github.com/gerrcass/bomberman-clone/issues/1) is the source of truth for rules, balance, scope, and testing. The latest completed slice is #17, **Run records and the Daily Run**, with tickets #18–#21.
 - **Tickets**: `gh issue list --state open --json number,title,blockedBy` describes the task graph. Work only the frontier: a ticket whose blockers are all closed.
 - **Vocabulary**: `GLOSSARY.md`. Use its terms in code, tests, tickets, and comments.
 - **Decisions**: `docs/adr/`. Read the ADRs that touch the area before changing it; surface conflicts rather than silently overriding them.
 - **Tracker, domain, and triage rules**: `docs/agents/`.
 - **Browser checks**: `docs/agents/browser-verification.md` before reporting presentation work done.
 
-The original build (#2–#9) and the bomb-techniques slice (#11–#15) are complete and deployed. Treat those closed tickets and the ADRs as precedent for new work. #17 is in progress; leave #1 open as the umbrella spec.
+The original build (#2–#9), the bomb-techniques slice (#11–#15), and the run-records slice (#17–#21) are complete and deployed. Treat those closed tickets and the ADRs as precedent for new work. Leave #1 open as the umbrella spec.
 
 ## Workflow
 

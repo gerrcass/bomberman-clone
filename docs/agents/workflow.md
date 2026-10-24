@@ -5,7 +5,7 @@ This repository uses the Matt Pocock engineering skills, installed under `.agent
 ## Ticket flow
 
 - The umbrella spec is issue #1. Its original tickets are sub-issues #2–#9 with native blocking links; they are complete and serve as precedent.
-- The bomb-techniques slice #11–#15 is closed. The current slice is spec #17, **Run records and the Daily Run**, with tickets #18–#21.
+- The bomb-techniques slice #11–#15 and the run-records slice #17–#21 are closed. New work starts under the newest open spec; #1 stays open as the umbrella spec.
 - A ticket is ready when every issue in its `blockedBy.nodes` is closed. Work only the frontier.
 - `to-tickets` publishes vertical slices; `implement-spec` runs the frontier, merges to an integration branch, and closes tickets.
 - Each ticket is implemented test-first and verified against its acceptance criteria before it is closed.
