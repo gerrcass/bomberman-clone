@@ -6,6 +6,8 @@ import {
   type RunSession,
   replaySessionFor,
   retrySeed,
+  runModeBadge,
+  runRecordMode,
   stageIntroModeLabel,
 } from './session';
 
@@ -94,5 +96,25 @@ describe('run mode labels', () => {
   it('hides the Endless stage-intro label and names the mode on game over', () => {
     expect(stageIntroModeLabel(ENDLESS)).toBeNull();
     expect(gameOverModeLabel(ENDLESS)).toBe('Endless Run');
+  });
+
+  it('badges each Run Mode', () => {
+    expect(runModeBadge('endless')).toBe('Endless');
+    expect(runModeBadge('daily')).toBe('Daily');
+    expect(runModeBadge('seed')).toBe('Seed');
+  });
+});
+
+describe('runRecordMode', () => {
+  it('maps an Endless Run to an endless record with no date', () => {
+    expect(runRecordMode(ENDLESS)).toEqual({ mode: 'endless', dailyDate: null });
+  });
+
+  it('maps a Daily Run to a daily record with its captured date', () => {
+    expect(runRecordMode(DAILY)).toEqual({ mode: 'daily', dailyDate: '2026-10-23' });
+  });
+
+  it('maps a Seed Run to a seed record with no date', () => {
+    expect(runRecordMode(SEED)).toEqual({ mode: 'seed', dailyDate: null });
   });
 });

@@ -22,7 +22,7 @@ Check:
 - Arrow keys/WASD move; Space places a bomb; Escape/P pauses; M mutes.
 - Pause offers Resume, Settings, and a confirmed Quit Run.
 - Settings toggles save immediately and survive a reload.
-- How to Play fits without layout overflow and explains Daily Runs, Seed Runs, Seed Codes, Replay seed, Share Links, and Records.
+- How to Play fits the 1280x900 screen without internal scrolling, explains Daily Runs, Seed Runs, Seed Codes, Replay seed, Share Links, and Records, and on short windows scrolls internally without page overflow and opens with visible focus at the top.
 - The browser console has no exceptions.
 - The Network panel requests only the built JS, CSS, and bundled font.
 
@@ -37,6 +37,8 @@ npm run dev -- --port 5174 --strictPort
 Then call `__bombBlitzDebug.showIntermission()` or `__bombBlitzDebug.showGameOver()` from the console.
 
 Verify the intermission draft has three distinct cards, keyboard selection works with 1–3/Tab/Enter, and the game-over screen shows score, stage, bricks, rivals, pickups, and time.
+
+- **How to Play keyboard:** open it with Tab/Enter. The heading receives focus with a visible ring at the panel top; Tab reaches Back; Escape closes the dialog and returns focus to How to Play. At 800x600 and 640x480 the page does not overflow and the panel scrolls internally.
 
 ## Seed Run and Share Link checks
 
@@ -59,8 +61,9 @@ Use a clean profile for the first pass, then the dev harness for a seeded setup.
 - **Game over:** names the mode and shows the Seed Code for every new run. Copy
   Seed Link is reachable by Tab and activates with Enter or Space.
 - **Copy success:** with clipboard permission, activate Copy Seed Link. A live
-  status confirms the copy, and the clipboard holds the current page path with
-  `?seed=<canonical code>`.
+  status confirms the copy, and the clipboard holds the current page URL with
+  `?seed=<canonical code>`; the deployed path, other parameters, and the hash
+  survive.
 - **Clipboard denied:** block or remove `navigator.clipboard` (or deny the
   permission). Activate Copy Seed Link; a readonly, selectable Share Link
   appears, receives focus, and the status explains that it must be copied

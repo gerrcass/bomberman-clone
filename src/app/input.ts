@@ -36,6 +36,11 @@ const TEXT_INPUT_TYPES: ReadonlySet<string> = new Set([
   'tel',
   'password',
   'number',
+  'date',
+  'time',
+  'month',
+  'week',
+  'datetime-local',
 ]);
 
 /**

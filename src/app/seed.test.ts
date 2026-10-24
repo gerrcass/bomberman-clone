@@ -94,6 +94,18 @@ describe('buildShareLink', () => {
     expect(new URL(link).searchParams.get('seed')).toBe('Z');
   });
 
+  it('ignores an empty query and trailing separators', () => {
+    expect(buildShareLink('https://example.com/game/?', 36)).toBe(
+      'https://example.com/game/?seed=10',
+    );
+    expect(buildShareLink('https://example.com/game/?seed=OLD&', 36)).toBe(
+      'https://example.com/game/?seed=10',
+    );
+    expect(buildShareLink('https://example.com/game/?&seed=OLD&&#top', 36)).toBe(
+      'https://example.com/game/?seed=10#top',
+    );
+  });
+
   it('treats an invalid Seed as a programmer error', () => {
     expect(() => buildShareLink('https://example.com/', -1)).toThrow(RangeError);
     expect(() => buildShareLink('https://example.com/', 0x1_0000_0000)).toThrow(RangeError);
@@ -172,6 +184,20 @@ describe('removeSeedParam', () => {
     );
   });
 
+  it('ignores empty query segments', () => {
+    expect(removeSeedParam('https://example.com/game/?&seed=10&')).toBe(
+      'https://example.com/game/',
+    );
+    expect(removeSeedParam('https://example.com/game/?a=1&&seed=10&b=2')).toBe(
+      'https://example.com/game/?a=1&b=2',
+    );
+  });
+
+  it('leaves an empty or separator-only query untouched', () => {
+    expect(removeSeedParam('https://example.com/game/?')).toBe('https://example.com/game/?');
+    expect(removeSeedParam('https://example.com/game/?&')).toBe('https://example.com/game/?&');
+  });
+
   it('treats the parameter name as case-sensitive', () => {
     expect(removeSeedParam('https://example.com/game/?Seed=OLD&seed=10')).toBe(
       'https://example.com/game/?Seed=OLD',
@@ -200,6 +226,43 @@ function createSeedRun(code: string, script: readonly Intent[]): Run | null {
   return run;
 }
 
+/**
+ * Starts a Run from a Seed Code on the one-rival pocket fixture and drives it
+ * to the intermission draft with the same intent script every time.
+ */
+function createPocketSeedRun(code: string): Run | null {
+  const seed = parseSeedCode(code);
+  if (seed === null) {
+    return null;
+  }
+  const run = createRun(seed, {
+    firstStage: {
+      arena: [
+        '#########',
+        '#.......#',
+        '#......##',
+        '#.....PR#',
+        '#......##',
+        '#.......#',
+        '#########',
+      ],
+      rivalCount: 1,
+      rivalSpawns: [{ x: 7, y: 3 }],
+      blastRange: 1,
+      fuseMs: 900,
+    },
+  });
+
+  run.step({ bomb: true });
+  for (let index = 0; index < 20; index += 1) {
+    run.step({ direction: 'left' });
+  }
+  for (let index = 0; index < 120; index += 1) {
+    run.step({});
+  }
+  return run;
+}
+
 describe('seed-mode determinism', () => {
   it('replays identical state from the same Seed Code and intent script', () => {
     const script: readonly Intent[] = [
@@ -221,6 +284,24 @@ describe('seed-mode determinism', () => {
     }
     expect(first.getState()).toEqual(second.getState());
     expect(JSON.stringify(first.getState())).toBe(JSON.stringify(second.getState()));
+  });
+
+  it('offers the same intermission draft for the same Seed', () => {
+    const first = createPocketSeedRun('SEED1');
+    const second = createPocketSeedRun('SEED1');
+
+    expect(first).not.toBeNull();
+    expect(second).not.toBeNull();
+    if (first === null || second === null) {
+      return;
+    }
+
+    const firstState = first.getState();
+    const secondState = second.getState();
+    expect(firstState.status).toBe('intermission');
+    expect(secondState.status).toBe('intermission');
+    expect(firstState.draft).toHaveLength(3);
+    expect(firstState.draft).toEqual(secondState.draft);
   });
 
   it('produces a different first arena for a different Seed', () => {

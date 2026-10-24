@@ -113,9 +113,11 @@ run by game over or confirmed quit records it once and updates the profile.
   action. Back or Escape returns to the title or game over. The title also shows
   today's Daily Best and the last run.
 - **Game over** names the Run Mode and shows the Seed Code for every new run.
-  **Copy Seed Link** builds a link from the current page path with
-  `?seed=<Seed Code>`, so it works at a domain root or under a subpath. It
-  reports success in a status line, or reveals the link in a selectable field
+  **Copy Seed Link** builds a link from the current page URL with
+  `?seed=<Seed Code>`. It preserves the deployed path, every other query
+  parameter, and the hash, so the link works at a domain root or under a
+  subpath; any existing `seed` values are replaced with the canonical Seed Code.
+  It reports success in a status line, or reveals the link in a selectable field
   when the Clipboard API is unavailable. Opening a link fills the Seed Run setup
   and focuses Start; it never auto-starts a run. The `seed` parameter is removed
   from the address bar after it opens the setup, and an invalid value is

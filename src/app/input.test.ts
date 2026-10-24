@@ -137,6 +137,26 @@ describe('keyboard input', () => {
     expect(onPauseToggle).toHaveBeenCalledTimes(1);
   });
 
+  it('leaves keys typed in date and time fields to the browser', () => {
+    for (const type of ['date', 'time', 'month', 'week', 'datetime-local']) {
+      const fake = fakeWindow();
+      const onPauseToggle = vi.fn();
+      const input = createInput(fake.win, { onPauseToggle });
+      input.setGameplayEnabled(true);
+      const target = { tagName: 'INPUT', type } as unknown as EventTarget;
+
+      fake.emit('keydown', { key: 'p', target });
+      fake.emit('keydown', { key: 'Escape', target });
+      fake.emit('keydown', { key: 'd', target });
+      fake.emit('keydown', { code: 'Space', target });
+
+      expect(onPauseToggle).not.toHaveBeenCalled();
+      expect(input.direction).toBeNull();
+      expect(input.consumeBomb()).toBe(false);
+      expect(input.consumeDetonate()).toBe(false);
+    }
+  });
+
   it('releases a held direction and clears it on blur', () => {
     const fake = fakeWindow();
     const input = createInput(fake.win, { onPauseToggle: vi.fn() });
