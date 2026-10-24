@@ -98,8 +98,20 @@ _Avoid_: Daily challenge, daily mode, seeded run
 The highest score recorded for the current local date's Daily Run.
 _Avoid_: Daily high score, daily record
 
+**Seed Run**:
+A Run started from a Seed Code the player supplies, opens from a Share Link, or replays from a Run Record. The same Seed reproduces the arena sequence and draft offers, not the player's actions.
+_Avoid_: Custom run, challenge run, seeded run
+
+**Seed Code**:
+The short uppercase base36 text form of a Seed, used to start and share a Seed Run.
+_Avoid_: Seed string, seed password, hash
+
+**Share Link**:
+A URL that carries a Seed Code and opens the Seed Run setup.
+_Avoid_: Invite, challenge link
+
 **Run Record**:
-The saved summary of one finished Run: its mode, finish time, score, stage, statistics, and owned techniques.
+The saved summary of one finished Run: its mode, seed, finish time, score, stage, statistics, and owned techniques. A Run Record created before seed capture has no seed.
 _Avoid_: History entry, result, log
 
 **Run History**:
@@ -107,7 +119,7 @@ The newest-first list of Run Records on the Profile, capped at 20.
 _Avoid_: Run log, match history, archive
 
 **Run Mode**:
-Whether a Run is an Endless Run or a Daily Run.
+Whether a Run is an Endless Run, a Daily Run, or a Seed Run.
 _Avoid_: Game type, challenge type
 
 **Stage**:
@@ -145,7 +157,7 @@ A bomber's desired action for a tick: a movement direction and a bomb press.
 _Avoid_: Command, input
 
 **Seed**:
-The value that makes arena generation and AI tie-breaking reproducible.
+The value that makes arena generation and AI tie-breaking reproducible. Every Run has one; a Seed Code is its text form.
 _Avoid_: Random number, RNG state
 
 **Score multiplier**:

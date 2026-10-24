@@ -5,7 +5,7 @@ Bomb Blitz is a browser Bomberman clone: a single-player, endless arena run of m
 ## Start here
 
 - **Live game**: https://gerrcass.github.io/bomberman-clone/
-- **Spec**: [issue #1](https://github.com/gerrcass/bomberman-clone/issues/1) is the source of truth for rules, balance, scope, and testing. The latest completed slice is #17, **Run records and the Daily Run**, with tickets #18–#21.
+- **Spec**: [issue #1](https://github.com/gerrcass/bomberman-clone/issues/1) is the source of truth for rules, balance, scope, and testing. The latest completed slice is #17, **Run records and the Daily Run**. The active slice is #23, **Seed Runs and Share Links**, with tickets #24–#28.
 - **Tickets**: `gh issue list --state open --json number,title,blockedBy` describes the task graph. Work only the frontier: a ticket whose blockers are all closed.
 - **Vocabulary**: `GLOSSARY.md`. Use its terms in code, tests, tickets, and comments.
 - **Decisions**: `docs/adr/`. Read the ADRs that touch the area before changing it; surface conflicts rather than silently overriding them.
@@ -75,6 +75,9 @@ npm run check      # lint + typecheck + test + build
 - The game auto-pauses when the document becomes hidden and resumes paused.
 - Walls stop blast rays without producing a blast tile.
 - Profile v2 is authoritative once present. The v1 key is a read-only migration source; a malformed v2 falls back to defaults rather than resurrecting v1.
+- Profile v3 is authoritative once present. v2 is read once when v3 is absent; v1 is read only when both are absent. Migrated records have no Seed and offer no replay. Old keys are never written.
+- Every new Run Record stores its Seed. A Seed Run is a Run Mode, not a gameplay modifier; the simulation still receives only a Seed and never learns the mode, date, Seed Code, or Share Link.
+- A Seed Code is uppercase base36, 1–7 characters, and maps to an unsigned 32-bit Seed. The same Seed reproduces arenas and draft offers, not the player's inputs.
 - Run History is local, newest-first, and capped at 20. A finished run records once; a daily run also updates the current date's Daily Best.
 
 ## Quality bar
