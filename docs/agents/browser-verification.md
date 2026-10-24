@@ -191,3 +191,7 @@ Draft a technique in a real run, or render one through the dev harness:
 ## Evidence
 
 Follow the evidence gate in `docs/agents/pr-evidence.md`. For a visual change, capture before and after from the production build at the same 1280×900 viewport and an isolated browser context. Upload both with `gh --attach` when opening or updating the PR; the gate rejects external image and video hosts. A committed pair goes under `docs/evidence/<slug>/`. README screenshots are current-state documentation, not the PR evidence pair.
+
+Wait about 300 ms after the stage intro appears before capturing it. The intro fades in over roughly 1.3 s, and an immediate capture catches a faint frame.
+
+The stage intro fades in over its first ~250 ms. Wait about 350 ms after it appears before capturing, or the evidence will show a ghosted overlay.
