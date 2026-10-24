@@ -42,6 +42,7 @@ import {
 } from './powerups';
 import { createRng } from './rng';
 import { INITIAL_TECHNIQUES, ownsTechnique, type TechniqueCounts } from './techniques';
+import { DEFAULT_STAGE_THEME, type StageThemeId } from './themes';
 import {
   type ArenaState,
   BASE_BLAST_RANGE,
@@ -77,6 +78,8 @@ import {
 export interface StageOptions {
   readonly seed: number;
   readonly stage?: number;
+  /** Stage Theme for the generated arena and the snapshot; defaults to Pillar Hall. */
+  readonly theme?: StageThemeId;
   /** Optional ASCII fixture; `P` marks the player spawn. */
   readonly arena?: readonly string[];
   /** Overrides the spawn when the fixture has no `P` marker. */
@@ -174,7 +177,8 @@ interface MutableRival {
 const BLAST_DIRECTIONS: readonly Direction[] = ['up', 'down', 'left', 'right'];
 
 export function createStage(options: StageOptions): Stage {
-  const parsed = resolveArena(options);
+  const theme = options.theme ?? DEFAULT_STAGE_THEME;
+  const parsed = resolveArena(options, theme);
   const spawn = resolveSpawn(options, parsed);
   if (!isWalkable(parsed.arena, spawn.x, spawn.y)) {
     throw new Error('Player spawn must be a floor tile');
@@ -304,6 +308,7 @@ export function createStage(options: StageOptions): Stage {
       return {
         stage: stageNumber,
         seed: options.seed,
+        theme,
         tick,
         arena: {
           width: arena.arena.width,
@@ -1166,11 +1171,11 @@ export function createStage(options: StageOptions): Stage {
   }
 }
 
-function resolveArena(options: StageOptions): ParsedArena {
+function resolveArena(options: StageOptions, theme: StageThemeId): ParsedArena {
   if (options.arena !== undefined) {
     return parseAsciiArena(options.arena);
   }
-  return { arena: generateArena(options.seed), spawn: null };
+  return { arena: generateArena(options.seed, theme), spawn: null };
 }
 
 function resolveSpawn(options: StageOptions, parsed: ParsedArena): TileCoord {

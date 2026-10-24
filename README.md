@@ -11,6 +11,10 @@ lives do; your best score, best stage, today's Daily Best, and last 20 runs stay
 in the browser. Play a fresh Endless Run, today's Daily Run, or a Seed Run from
 a Seed Code someone shared with you.
 
+Stages rotate through four **Stage Themes**: Pillar Hall, Brickworks,
+Crossroads, and Twin Courts. Each theme changes the arena's walls, brick
+density, and terrain palette; none of them changes the rules.
+
 **Play the live game:** https://gerrcass.github.io/bomberman-clone/
 
 ![Bomb Blitz arena with the player, rivals, bricks, and HUD](docs/screenshots/arena.png)
@@ -48,6 +52,14 @@ immediately. Walls, bricks, and bombs block entry.
 Each run starts with 3 lives, one bomb, blast range 1, base speed, no shield,
 a 1.0× score multiplier, and a 2200 ms fuse.
 
+- **Stage Themes** repeat on a four-stage cycle. Stage 1 and the first stage of
+  every later cycle are Pillar Hall; the other three stages use a seeded
+  permutation of the remaining themes, so every cycle shows all four and no two
+  adjacent stages share one. The choice is a pure function of the Seed and stage
+  number, so the same Seed reproduces the sequence, including Seed Run and Daily
+  Run retries. Themes change terrain and palette only: bombs, blasts, power-ups,
+  rivals, scoring, upgrades, Techniques, lives, and spawn corners behave exactly
+  as they do in Pillar Hall.
 - **Bombs** detonate in a cross, stop at walls, destroy the first brick in each
   direction, and chain through touching bombs. A bomb placed mid-step lands on
   the tile you are leaving.
@@ -78,6 +90,8 @@ a 1.0× score multiplier, and a 2200 ms fuse.
   Rivals keep classic bombs.
 - **Scoring:** bricks 10, pickups 25, rival defeats 500, plus stage-clear and
   time bonuses. The multiplier applies to every award.
+
+![2×2 gallery of the four Stage Themes: Pillar Hall, Brickworks, Crossroads, and Twin Courts](docs/screenshots/stage-themes.png)
 
 The game auto-pauses when the tab becomes hidden and returns paused. Ending a
 run by game over or confirmed quit records it once and updates the profile.
@@ -167,7 +181,8 @@ index.html                  App shell and menu screens
 src/main.ts                 Browser entry point
 src/styles.css              Arcade theme, responsive layout, accessibility modes
 src/game/                   Deterministic simulation (no DOM, Canvas, or audio)
-  arena.ts                  Seeded arena generation and ASCII fixtures
+  arena.ts                  Seeded theme arena generation and ASCII fixtures
+  themes.ts                 Stage Theme definitions and the seeded four-Stage cycle
   movement.ts               Tile-to-tile movement and input buffering
   powerups.ts               Hidden power-up generation, caps, and weights
   stage.ts                  Stage seam: bombs, blasts, rivals, lives, pickups
@@ -176,6 +191,7 @@ src/game/                   Deterministic simulation (no DOM, Canvas, or audio)
   upgrades.ts               Upgrade pool, draft, caps, and stat helpers
   run.ts                    Endless run loop, scoring, intermission state
 src/render/                 Runtime pixel art, particles, camera, Canvas renderer
+  theme-palettes.ts         One terrain palette per Stage Theme
 src/audio/                  Synthesized SFX and chiptune loop
 src/app/                    Browser shell: loop, input, screens, persistence, HUD
   daily.ts                  Local YYYY-MM-DD date key and stable Daily Run seed
@@ -193,8 +209,8 @@ playwright.config.ts        Preview and dev servers for the smoke suite
 
 Game tests never touch a browser: they build stages from seeds or ASCII arena
 fixtures and drive the fixed 1/60-second simulation directly. Renderer and app
-tests cover snapshotting, profile persistence, Seed Codes and Share Links, and
-the daily date/seed.
+tests cover terrain palettes, snapshotting, profile persistence, Seed Codes and
+Share Links, and the daily date/seed.
 
 ## Commands
 
@@ -214,20 +230,23 @@ the daily date/seed.
 
 ## Testing
 
-Vitest covers arena generation invariants (dimensions, border, lattice pillars,
-spawn clearance, brick density, seed reproducibility), movement rules, bomb
-placement and capacity, fuse timing, blast geometry and lifetime, wall and brick
-stopping, chain reactions, hidden power-up generation and guarantees, reveal
-and collection, stat caps, shield absorption, lives and respawns, rival danger
-maps and decisions, rival contact and defeats, stage clear, stage scaling,
-technique ownership and the one-technique draft, Bomb Kick slides and blockers,
-Remote Detonation triggers, Piercing Blast rays, upgrade drafts and caps,
-scoring and multiplier rounding, run stats, profile defaults and malformed data,
-profile v3 validation, v2 and v1 migration, Run History cap and ordering, Daily
-Best transitions, Seed Code formatting and parsing across the 32-bit boundary,
-Share Link construction and removal, seed-mode run determinism, Run Mode labels,
-retry seeding, replay sessions, the local date key and stable daily seed,
-daily-mode run determinism, persistence, and fixed-seed determinism.
+Vitest covers Stage Theme selection (the Pillar Hall cycle anchor, four-theme
+cycles, adjacent-theme variety, Seed stability), arena generation invariants per
+theme (dimensions, border, wall signatures, spawn clearance, brick density,
+symmetry, connectivity, seed reproducibility), terrain palette coverage,
+movement rules, bomb placement and capacity, fuse timing, blast geometry and
+lifetime, wall and brick stopping, chain reactions, hidden power-up generation
+and guarantees, reveal and collection, stat caps, shield absorption, lives and
+respawns, rival danger maps and decisions, rival contact and defeats, stage
+clear, stage scaling, technique ownership and the one-technique draft, Bomb Kick
+slides and blockers, Remote Detonation triggers, Piercing Blast rays, upgrade
+drafts and caps, scoring and multiplier rounding, run stats, profile defaults
+and malformed data, profile v3 validation, v2 and v1 migration, Run History cap
+and ordering, Daily Best transitions, Seed Code formatting and parsing across
+the 32-bit boundary, Share Link construction and removal, seed-mode run
+determinism, Run Mode labels, retry seeding, replay sessions, the local date key
+and stable daily seed, daily-mode run determinism, persistence, and fixed-seed
+determinism.
 
 Scenarios use small ASCII arena fixtures so each case reads as a maze:
 
@@ -247,7 +266,8 @@ the tick return value.
 
 `npm run test:smoke` builds the production bundle, starts preview and the dev
 harness, and runs Playwright against the Seed Run, Share Link, Records replay,
-profile migration, and clipboard fallback paths.
+profile migration, and clipboard fallback paths, plus the Stage Theme paths: the
+Stage 1 theme line and shell attribute, and a dev-harness run for each theme.
 
 ## Static build and deployment
 

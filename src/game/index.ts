@@ -6,5 +6,6 @@ export * from './rng';
 export * from './run';
 export * from './stage';
 export * from './techniques';
+export * from './themes';
 export * from './types';
 export * from './upgrades';

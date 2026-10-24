@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createRun, type RunOptions, stageSeed } from './run';
 import { INITIAL_TECHNIQUES, OFFERED_TECHNIQUES } from './techniques';
+import { themeForStage } from './themes';
 import { isTechniqueId } from './upgrades';
 
 const CLEARABLE = [
@@ -225,5 +226,55 @@ describe('quit accounting', () => {
     expect(after.status).toBe('gameover');
     expect(after.stats).toEqual(before.stats);
     expect(after.score).toBeGreaterThanOrEqual(before.score);
+  });
+});
+
+describe('stage themes in a run', () => {
+  it('starts in Pillar Hall and passes the seeded theme into the next stage', () => {
+    const run = clearFirstStage(77);
+    const before = run.getState();
+
+    expect(before.stageState.theme).toBe('pillar-hall');
+    expect(before.stageState.theme).toBe(themeForStage(77, 1));
+
+    const choice = before.draft[0];
+    expect(choice).toBeDefined();
+    if (choice === undefined) return;
+    expect(run.chooseUpgrade(choice)).toBe(true);
+
+    const after = run.getState();
+    expect(after.stage).toBe(2);
+    expect(after.stageState.theme).toBe(themeForStage(77, 2));
+    expect(after.stageState.theme).not.toBe('pillar-hall');
+  });
+
+  it('honours a first-stage theme override for fixtures and the dev harness', () => {
+    const run = createRun(77, {
+      firstStage: {
+        arena: CLEARABLE,
+        rivalCount: 0,
+        theme: 'twin-courts',
+      },
+    });
+
+    expect(run.getState().stageState.theme).toBe('twin-courts');
+    expect(run.getState().stageState.theme).not.toBe(themeForStage(77, 1));
+  });
+
+  it('reproduces the stage 2 theme for the same seed', () => {
+    const first = clearFirstStage(2024);
+    const second = clearFirstStage(2024);
+    const firstChoice = first.getState().draft[0];
+    const secondChoice = second.getState().draft[0];
+
+    expect(firstChoice).toBeDefined();
+    expect(firstChoice).toBe(secondChoice);
+    if (firstChoice === undefined || secondChoice === undefined) return;
+
+    expect(first.chooseUpgrade(firstChoice)).toBe(true);
+    expect(second.chooseUpgrade(secondChoice)).toBe(true);
+
+    expect(first.getState().stageState.theme).toBe(second.getState().stageState.theme);
+    expect(first.getState().stageState.theme).toBe(themeForStage(2024, 2));
   });
 });

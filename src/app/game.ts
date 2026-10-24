@@ -2,6 +2,7 @@ import { createAudio } from '../audio/audio';
 import {
   createRun,
   createStage,
+  DEFAULT_STAGE_THEME,
   INITIAL_TECHNIQUES,
   isTechniqueId,
   ownedTechniqueIds,
@@ -9,10 +10,12 @@ import {
   type RunState,
   type StageEvent,
   type StageState,
+  type StageThemeId,
   type StatUpgradeId,
   TECHNIQUE_DEFINITIONS,
   type TechniqueCounts,
   type TechniqueId,
+  themeDefinition,
   UPGRADE_DEFINITIONS,
   type UpgradeId,
 } from '../game';
@@ -108,6 +111,7 @@ export function createGameApp(doc: Document): GameApp {
   const stageIntro = requireElement<HTMLElement>(doc, '#stage-intro');
   const stageIntroMode = requireElement<HTMLElement>(doc, '#stage-intro-mode');
   const stageIntroStage = requireElement<HTMLElement>(doc, '#stage-intro-stage');
+  const stageIntroTheme = requireElement<HTMLElement>(doc, '#stage-intro-theme');
   const stageIntroRivals = requireElement<HTMLElement>(doc, '#stage-intro-rivals');
   const gameoverScreen = requireElement<HTMLElement>(doc, '#gameover-screen');
   const gameoverMode = requireElement<HTMLElement>(doc, '#gameover-mode');
@@ -225,6 +229,14 @@ export function createGameApp(doc: Document): GameApp {
     return screen === 'title' || screen === 'howto' || screen === 'settings' || screen === 'seed'
       ? titleStage
       : run.getState().stageState;
+  }
+
+  /** The shell accent follows the backdrop the player can see. */
+  function syncShellTheme(theme: StageThemeId): void {
+    if (shell.dataset['theme'] === theme) {
+      return;
+    }
+    shell.dataset['theme'] = theme;
   }
 
   function applySettings(): void {
@@ -692,6 +704,8 @@ export function createGameApp(doc: Document): GameApp {
       stageIntroMode.hidden = false;
     }
     setText(stageIntroStage, String(state.stage));
+    setText(stageIntroTheme, themeDefinition(state.stageState.theme).name);
+    syncShellTheme(state.stageState.theme);
     setText(
       stageIntroRivals,
       rivals === 0
@@ -1029,7 +1043,9 @@ export function createGameApp(doc: Document): GameApp {
     if (frameEvents.length > 0) {
       audio.playEvents(frameEvents);
     }
-    renderer.render(displayStage(), frameEvents);
+    const shownStage = displayStage();
+    syncShellTheme(shownStage.theme);
+    renderer.render(shownStage, frameEvents);
     win.requestAnimationFrame(frame);
   }
 
@@ -1229,6 +1245,7 @@ export function createGameApp(doc: Document): GameApp {
         showGameOver(): void;
         forceRunOver(): void;
         startTechniqueRun(technique?: TechniqueId): void;
+        startThemeRun(theme?: StageThemeId): void;
         startKickRun(): void;
         startPierceRun(): void;
         startDraftRun(): void;
@@ -1270,6 +1287,9 @@ export function createGameApp(doc: Document): GameApp {
           }),
           { mode: 'endless' },
         );
+      },
+      startThemeRun(theme: StageThemeId = DEFAULT_STAGE_THEME): void {
+        beginRun(createRun(TITLE_SEED, { firstStage: { theme } }), { mode: 'endless' });
       },
       startKickRun(): void {
         // A quiet two-row room makes the slide path and follow-up readable.

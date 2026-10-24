@@ -61,6 +61,19 @@ body {
   gap: 8px;
   width: var(--canvas-width);
   max-width: 100%;
+  --theme-accent: var(--cyan);
+}
+
+.game-shell[data-theme="brickworks"] {
+  --theme-accent: #ffb27a;
+}
+
+.game-shell[data-theme="crossroads"] {
+  --theme-accent: #b9a6ff;
+}
+
+.game-shell[data-theme="twin-courts"] {
+  --theme-accent: #7ef0bb;
 }
 
 .hud {
@@ -799,6 +812,16 @@ kbd {
   text-shadow:
     0 4px 0 #08262b,
     0 0 30px rgba(63, 224, 230, 0.35);
+}
+
+.stage-intro-theme {
+  margin: 2px 0 0;
+  color: var(--theme-accent);
+  font-size: clamp(11px, 1.4vw, 14px);
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  text-shadow: 0 2px 0 rgba(4, 7, 12, 0.9);
 }
 
 .stage-intro-rivals {
@@ -1623,6 +1646,11 @@ html[data-high-contrast="true"] .stage-intro-mode,
 html[data-high-contrast="true"] .gameover-mode,
 html[data-high-contrast="true"] .gameover-daily-score {
   color: #ffe89a;
+}
+
+html[data-high-contrast="true"] .stage-intro-theme {
+  color: #ffffff;
+  text-shadow: none;
 }
 
 @media (max-width: 640px) {

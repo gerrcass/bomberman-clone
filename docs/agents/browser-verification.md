@@ -22,7 +22,7 @@ Check:
 - Arrow keys/WASD move; Space places a bomb; Escape/P pauses; M mutes.
 - Pause offers Resume, Settings, and a confirmed Quit Run.
 - Settings toggles save immediately and survive a reload.
-- How to Play fits the 1280x900 screen without internal scrolling, explains Daily Runs, Seed Runs, Seed Codes, Replay seed, Share Links, and Records, and on short windows scrolls internally without page overflow and opens with visible focus at the top.
+- How to Play fits the 1280x900 screen without internal scrolling, explains Stage Themes, Daily Runs, Seed Runs, Seed Codes, Replay seed, Share Links, and Records, and on short windows scrolls internally without page overflow and opens with visible focus at the top.
 - The browser console has no exceptions.
 - The Network panel requests only the built JS, CSS, and bundled font.
 
@@ -32,7 +32,7 @@ Check:
 npm run test:smoke
 ```
 
-This builds the production bundle, starts preview and the dev harness, and runs Playwright against both. It covers the title Seed Run action, Seed Code validation, deep-link cleanup, Records replay, the v2→v3 migration, and the clipboard fallback. CI runs it on every push and pull request.
+This builds the production bundle, starts preview and the dev harness, and runs Playwright against both. It covers the title Seed Run action, Seed Code validation, deep-link cleanup, Records replay, the v2→v3 migration, the clipboard fallback, the Stage 1 theme line and shell attribute, and a dev-harness run for each Stage Theme. CI runs it on every push and pull request.
 
 ## Harness and isolation
 
@@ -114,6 +114,40 @@ Use the dev harness for seeded states, and a real run for the end-to-end path:
 - **Keyboard:** Tab to Records, press Enter, Tab/Shift+Tab inside the dialog, Escape to close, and confirm focus returns to the Records control.
 - **Small window:** resize narrow; the records list scrolls inside the panel, the seed line and Replay seed stay usable, and the canvas does not clip.
 - **High Contrast and Reduced Motion:** confirm mode badges, Seed Code lines, Replay seed buttons, and Technique chips stay distinct, and the Records screen adds no mandatory animation.
+- **No traffic:** the Network panel still requests only the built assets.
+
+## Stage Theme checks
+
+Stage 1 is always Pillar Hall; later themes come from the Seed. Use the dev
+harness for the other three instead of playing to their Stage.
+
+- **Stage 1:** start Play. The intro names `PILLAR HALL` between the Stage number
+  and the rival line, the shell carries `data-theme="pillar-hall"`, and the
+  arena shows the blue-grey Pillar Hall lattice.
+- **Four palettes:** with `npm run dev`, call
+  `__bombBlitzDebug.startThemeRun('brickworks')`, `'crossroads'`, and
+  `'twin-courts'` from the console. Each intro names the theme, the shell
+  attribute matches, and the arena shows that theme's walls, brick density, and
+  palette. The player, rivals, bombs, blasts, and power-ups keep their usual
+  colours in every theme.
+- **Intro line:** the theme name sits between the Stage number and the rival
+  line; the Run Mode line, Stage number, and rival count keep their existing
+  text and order. The intro still fits at 1280x900 and in a small window.
+- **Seed reproducibility:** start a Seed Run with `1Z141Z3` and note the Stage 2
+  theme in the intro. Retry Run and reach Stage 2 again; the theme matches. A
+  Daily Run retry also keeps its sequence; a retry after an Endless Run gets a
+  new Seed and may get a different order.
+- **Backdrops:** the title, How to Play, Settings, Seed Run setup, and Records
+  opened from the title show Pillar Hall. Pause, game over, and Records opened
+  from game over keep the run's stage and `data-theme`; the theme accent is a
+  stage-intro treatment and is not visible on those screens.
+- **High Contrast:** repeat the four harness runs with High Contrast on. Walls,
+  bricks, blasts, and pickups stay distinct in every palette, and the theme name
+  stays at full white contrast.
+- **Reduced Motion:** repeat one themed run with Reduced Motion on. The theme
+  stays readable and adds no mandatory animation.
+- **Small window:** at 800x600 and 640x480 the theme line stays inside the stage
+  frame, the intro does not clip, and the page does not overflow.
 - **No traffic:** the Network panel still requests only the built assets.
 
 ## Profile v3 migration checks

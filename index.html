@@ -17,7 +17,7 @@
   </head>
   <body>
     <main class="app">
-      <section id="game-shell" class="game-shell" aria-label="Bomb Blitz">
+      <section id="game-shell" class="game-shell" aria-label="Bomb Blitz" data-theme="pillar-hall">
         <header id="hud" class="hud" hidden>
           <div class="hud-stat">
             <span class="hud-label">Stage</span>
@@ -129,6 +129,10 @@
                   <p>Clear every rival from the arena; stages get harder, but your build carries over. Blasts and rival contact cost a life, a shield absorbs one, and the run ends when lives run out.</p>
                 </div>
                 <div>
+                  <h3>Stage Themes</h3>
+                  <p>Each stage is one of four themes: <strong>Pillar Hall</strong>, <strong>Brickworks</strong>, <strong>Crossroads</strong>, or <strong>Twin Courts</strong>. The theme changes the arena, not the rules; the stage intro names it.</p>
+                </div>
+                <div>
                   <h3>Bombs</h3>
                   <p>Space drops a bomb. Blasts travel in a cross, stop at walls, destroy the first brick (unless the blast is piercing), and chain-detonate other bombs.</p>
                 </div>
@@ -150,11 +154,7 @@
                 </div>
                 <div>
                   <h3>Seed Runs</h3>
-                  <p>A <strong>Seed Run</strong> starts from a <strong>Seed Code</strong>. Same code, same arenas and draft offers—not your actions.</p>
-                </div>
-                <div>
-                  <h3>Seed Codes</h3>
-                  <p>Uppercase base36, 1–7 letters or numbers. Lowercase works, <strong>0</strong> is valid, and the range is 32-bit.</p>
+                  <p>A <strong>Seed Run</strong> starts from a <strong>Seed Code</strong> (uppercase base36, 1–7 letters or numbers; lowercase works, <strong>0</strong> is valid, 32-bit range). Same code, same arenas, draft offers, and themes—not your actions.</p>
                 </div>
                 <div>
                   <h3>Records</h3>
@@ -364,6 +364,7 @@
             <p id="stage-intro-mode" class="eyebrow stage-intro-mode" hidden></p>
             <p class="eyebrow">Stage</p>
             <p id="stage-intro-stage" class="stage-intro-number">1</p>
+            <p id="stage-intro-theme" class="stage-intro-theme">Pillar Hall</p>
             <p id="stage-intro-rivals" class="stage-intro-rivals">2 rivals</p>
           </section>
         </div>

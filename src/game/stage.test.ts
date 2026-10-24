@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { tileAt } from './arena';
+import { arenaToAscii, generateArena, tileAt } from './arena';
 import { createStage, getStageState, tickStage } from './stage';
 import type { Direction } from './types';
 
@@ -91,5 +91,30 @@ describe('stage seam', () => {
     });
 
     expect(getStageState(stage).player.tile).toEqual({ x: 2, y: 1 });
+  });
+});
+
+describe('stage themes', () => {
+  it('defaults a generated stage to Pillar Hall and exposes the requested theme', () => {
+    const defaultState = getStageState(createStage({ seed: 5 }));
+
+    expect(defaultState.theme).toBe('pillar-hall');
+    expect(arenaToAscii(defaultState.arena)).toEqual(arenaToAscii(generateArena(5)));
+
+    const themedState = getStageState(createStage({ seed: 5, theme: 'twin-courts' }));
+
+    expect(themedState.theme).toBe('twin-courts');
+    expect(arenaToAscii(themedState.arena)).toEqual(arenaToAscii(generateArena(5, 'twin-courts')));
+  });
+
+  it('reports the requested theme for an ASCII fixture without changing its layout', () => {
+    const defaultState = getStageState(createStage({ seed: 1, arena: FIXTURE }));
+    expect(defaultState.theme).toBe('pillar-hall');
+
+    const themedStage = createStage({ seed: 1, arena: FIXTURE, theme: 'crossroads' });
+    const themedState = getStageState(themedStage);
+
+    expect(themedState.theme).toBe('crossroads');
+    expect(arenaToAscii(themedState.arena)).toEqual(FIXTURE.map((row) => row.replace('P', '.')));
   });
 });

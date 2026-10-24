@@ -1,6 +1,7 @@
 import { createRng } from './rng';
 import { createStage, type Stage, type StageOptions } from './stage';
 import { INITIAL_TECHNIQUES, type TechniqueCounts } from './techniques';
+import { themeForStage } from './themes';
 import type { Intent, StageEvent, StageState, StageStats, TileCoord } from './types';
 import {
   applyUpgrade,
@@ -51,7 +52,7 @@ export interface RunOptions {
    * the first always use the run's seeded arena.
    */
   readonly firstStage?: Partial<
-    Pick<StageOptions, 'arena' | 'rivalCount' | 'rivalSpawns' | 'fuseMs' | 'blastRange'>
+    Pick<StageOptions, 'arena' | 'rivalCount' | 'rivalSpawns' | 'fuseMs' | 'blastRange' | 'theme'>
   >;
   /**
    * Techniques the player starts the run with. Test and dev-harness seam; the
@@ -193,6 +194,7 @@ export function createRun(seed: number, options: RunOptions = {}): Run {
     const base: StageOptions = {
       seed: stageSeed(normalizedSeed, number),
       stage: number,
+      theme: themeForStage(normalizedSeed, number),
       lives,
       bombCapacity: bombCapacityFor(upgrades),
       blastRange: blastRangeFor(upgrades),

@@ -1,4 +1,5 @@
 import type { TechniqueCounts } from './techniques';
+import type { StageThemeId } from './themes';
 
 /** Shared vocabulary for the deterministic simulation. */
 
@@ -169,6 +170,8 @@ export interface StageStats {
 export interface StageState {
   readonly stage: number;
   readonly seed: number;
+  /** The Stage Theme whose layout and identity this Stage uses. */
+  readonly theme: StageThemeId;
   readonly tick: number;
   readonly arena: ArenaState;
   readonly player: PlayerState;
