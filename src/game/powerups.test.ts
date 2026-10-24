@@ -12,6 +12,7 @@ import {
   speedForStacks,
 } from './powerups';
 import { createStage, getStageState, type Stage, type StageOptions } from './stage';
+import { STAGE_THEME_IDS } from './themes';
 import {
   BASE_MOVE_SPEED,
   BRICK_POINTS,
@@ -114,6 +115,28 @@ describe('hidden power-up generation', () => {
     }
 
     expect([...seen].sort()).toEqual(['bomb', 'fire', 'shield', 'speed']);
+  });
+
+  it('guarantees the extra bomb and fire under bricks in every Stage Theme', () => {
+    for (const theme of STAGE_THEME_IDS) {
+      for (const seed of [1, 7, 99, 777, 2024]) {
+        const arena = generateArena(seed, theme);
+        const bricks = brickTiles({ arena, spawn: null });
+        const hidden = generateHiddenPowerUps(arena, seed);
+
+        expect(bricks).toBeGreaterThan(2);
+        expect(hidden).toHaveLength(Math.round(bricks * 0.55));
+        expect(hidden.some((powerUp) => powerUp.kind === 'bomb')).toBe(true);
+        expect(hidden.some((powerUp) => powerUp.kind === 'fire')).toBe(true);
+        expect(new Set(hidden.map((powerUp) => `${powerUp.tile.x},${powerUp.tile.y}`)).size).toBe(
+          hidden.length,
+        );
+
+        for (const powerUp of hidden) {
+          expect(tileAt(arena, powerUp.tile.x, powerUp.tile.y)).toBe('brick');
+        }
+      }
+    }
   });
 
   it('is reproducible from the stage seed', () => {
