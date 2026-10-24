@@ -15,7 +15,6 @@ This repository uses the Matt Pocock engineering skills, installed under `.agent
 - The `implement-spec` orchestrator keeps its turn open while an implementer runs. A subagent that outlives the turn leaves work unmerged; continue the thread and inspect its worktree before spawning anything new.
 - A slice ends with one integration PR to `main`, written with the `pr` skill, using GitHub-hosted evidence uploaded with `gh --attach`, and passing the gate in `docs/agents/pr-evidence.md`. After it merges, close the slice spec with a verification comment and remove its worktrees. Closed specs are not reopened; new scope gets a new spec issue.
 - `gh pr merge --delete-branch` skips the local branch delete when the integration branch is checked out in a worktree. Remove the worktree first, then delete the local branch.
-- When the integration branch is checked out in a worktree, `gh pr merge --delete-branch` deletes the remote branch but skips the local one. Remove the worktree first, then delete the local branch.
 
 ## Skills
 
