@@ -42,7 +42,7 @@ import {
 } from './powerups';
 import { createRng } from './rng';
 import { INITIAL_TECHNIQUES, ownsTechnique, type TechniqueCounts } from './techniques';
-import type { StageThemeId } from './themes';
+import { DEFAULT_STAGE_THEME, type StageThemeId } from './themes';
 import {
   type ArenaState,
   BASE_BLAST_RANGE,
@@ -177,7 +177,7 @@ interface MutableRival {
 const BLAST_DIRECTIONS: readonly Direction[] = ['up', 'down', 'left', 'right'];
 
 export function createStage(options: StageOptions): Stage {
-  const theme = options.theme ?? 'pillar-hall';
+  const theme = options.theme ?? DEFAULT_STAGE_THEME;
   const parsed = resolveArena(options, theme);
   const spawn = resolveSpawn(options, parsed);
   if (!isWalkable(parsed.arena, spawn.x, spawn.y)) {

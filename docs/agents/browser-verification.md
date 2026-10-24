@@ -139,7 +139,8 @@ harness for the other three instead of playing to their Stage.
   new Seed and may get a different order.
 - **Backdrops:** the title, How to Play, Settings, Seed Run setup, and Records
   opened from the title show Pillar Hall. Pause, game over, and Records opened
-  from game over keep the run's theme and accent.
+  from game over keep the run's stage and `data-theme`; the theme accent is a
+  stage-intro treatment and is not visible on those screens.
 - **High Contrast:** repeat the four harness runs with High Contrast on. Walls,
   bricks, blasts, and pickups stay distinct in every palette, and the theme name
   stays at full white contrast.

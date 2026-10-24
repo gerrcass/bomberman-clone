@@ -99,7 +99,7 @@ The highest score recorded for the current local date's Daily Run.
 _Avoid_: Daily high score, daily record
 
 **Seed Run**:
-A Run started from a Seed Code the player supplies, opens from a Share Link, or replays from a Run Record. The same Seed reproduces the arena sequence and draft offers, not the player's actions.
+A Run started from a Seed Code the player supplies, opens from a Share Link, or replays from a Run Record. The same Seed reproduces the arena sequence, the Stage Theme sequence, and draft offers, not the player's actions.
 _Avoid_: Custom run, challenge run, seeded run
 
 **Seed Code**:
@@ -161,7 +161,7 @@ A bomber's desired action for a tick: a movement direction and a bomb press.
 _Avoid_: Command, input
 
 **Seed**:
-The value that makes arena generation and AI tie-breaking reproducible. Every Run has one; a Seed Code is its text form.
+The value that makes arena generation, Stage Theme selection, and AI tie-breaking reproducible. Every Run has one; a Seed Code is its text form.
 _Avoid_: Random number, RNG state
 
 **Score multiplier**:

@@ -127,7 +127,7 @@ function spawnParticles(
 
   for (const event of events) {
     if (event.type === 'brick-destroyed') {
-      spawnBurst(particles, event.tile, event.tick, BRICK_PARTICLES, debris[0], debris[1]);
+      spawnBurst(particles, event.tile, event.tick, BRICK_PARTICLES, debris.highlight, debris.body);
       continue;
     }
     if (event.type === 'player-hit') {
