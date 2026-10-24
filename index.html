@@ -72,8 +72,14 @@
             <h1 class="game-title"><span>Bomb</span><span class="title-accent">Blitz</span></h1>
             <p class="title-blurb">Run the maze. Rule the arena.</p>
             <p id="title-best" class="title-best">BEST 000000 · STAGE 0</p>
+            <p id="title-daily-best" class="title-daily-best">DAILY · NO RUN YET</p>
+            <p id="title-last-run" class="title-last-run">LAST RUN — none yet</p>
             <div class="title-actions">
               <button id="play-button" class="button button-primary" type="button">Play</button>
+              <button id="daily-run-button" class="button button-daily" type="button">
+                Daily Run
+              </button>
+              <button id="records-button" class="button" type="button">Records</button>
               <button id="how-to-button" class="button" type="button">How to Play</button>
               <button id="settings-button" class="button" type="button">Settings</button>
             </div>
@@ -138,6 +144,14 @@
                   <p>Run-long techniques. <strong>Bomb Kick</strong>: walk into a resting bomb to send it sliding. <strong>Remote Detonation</strong>: press X to trigger your live bombs early. <strong>Piercing Blast</strong>: blasts break every brick in range. Fuses still run.</p>
                 </div>
                 <div>
+                  <h3>Daily Runs</h3>
+                  <p>Daily Run seeds the arena from your local date, so every attempt today is the same challenge. Replay it all day; the <strong>Daily Best</strong> is your highest score for today, and daily runs still count toward your all-time bests.</p>
+                </div>
+                <div>
+                  <h3>Records</h3>
+                  <p><strong>Records</strong> opens from the title or game over. It shows your all-time bests, today's Daily Best, and the 20 most recent runs with mode, date, score, stage, stats, and techniques.</p>
+                </div>
+                <div>
                   <h3>Controls</h3>
                   <p>Arrows or WASD move · Space bomb · X detonate · Esc or P pause · M mute</p>
                 </div>
@@ -195,11 +209,13 @@
             <div class="pause-panel">
               <p class="eyebrow">Run over</p>
               <h2 id="gameover-title" class="pause-title">Game Over</h2>
+              <p id="gameover-mode" class="gameover-mode">Endless Run</p>
               <p class="gameover-score-line">
                 Final score
                 <span id="gameover-score" class="gameover-score">000000</span>
               </p>
               <p id="gameover-newbest" class="new-best" hidden>New best!</p>
+              <p id="gameover-new-daily-best" class="new-best" hidden>New daily best!</p>
               <p class="gameover-stage">Reached stage <span id="gameover-stage">1</span></p>
               <dl class="run-stats">
                 <div><dt>Bricks</dt><dd id="gameover-bricks">0</dd></div>
@@ -207,13 +223,48 @@
                 <div><dt>Pickups</dt><dd id="gameover-pickups">0</dd></div>
                 <div><dt>Time</dt><dd id="gameover-time">0:00</dd></div>
               </dl>
+              <p id="gameover-daily" class="gameover-daily" hidden>
+                <span class="gameover-daily-label"
+                  >Daily best · <span id="gameover-daily-date"></span
+                ></span>
+                <span id="gameover-daily-best" class="gameover-daily-score">—</span>
+              </p>
               <div class="pause-actions">
                 <button id="retry-button" class="button button-primary" type="button">
                   Retry Run
                 </button>
+                <button id="gameover-records-button" class="button" type="button">Records</button>
                 <button id="title-button" class="button" type="button">Title</button>
               </div>
               <p class="controls-hint"><kbd>Tab</kbd> choose<span class="hint-sep">·</span><kbd>Enter</kbd> confirm</p>
+            </div>
+          </section>
+
+          <section
+            id="records-screen"
+            class="screen records-screen"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="records-title"
+            hidden
+          >
+            <div class="records-panel">
+              <p class="eyebrow">Run history</p>
+              <h2 id="records-title" class="pause-title">Records</h2>
+              <dl class="records-bests">
+                <div><dt>Best score</dt><dd id="records-best-score">000000</dd></div>
+                <div><dt>Best stage</dt><dd id="records-best-stage">0</dd></div>
+                <div><dt id="records-daily-label">Daily best</dt><dd id="records-daily-best">—</dd></div>
+              </dl>
+              <section id="records-scroll" class="records-scroll" aria-label="Run History">
+                <ol id="records-list" class="records-list"></ol>
+                <p id="records-empty" class="records-empty">
+                  Finish a run to create your first record.
+                </p>
+              </section>
+              <button id="records-back-button" class="button button-primary" type="button">
+                Back
+              </button>
             </div>
           </section>
 
@@ -238,6 +289,7 @@
           </section>
 
           <section id="stage-intro" class="stage-intro" aria-live="polite" hidden>
+            <p id="stage-intro-mode" class="eyebrow stage-intro-mode" hidden></p>
             <p class="eyebrow">Stage</p>
             <p id="stage-intro-stage" class="stage-intro-number">1</p>
             <p id="stage-intro-rivals" class="stage-intro-rivals">2 rivals</p>

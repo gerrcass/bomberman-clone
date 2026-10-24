@@ -4,13 +4,14 @@ This repository uses the Matt Pocock engineering skills, installed under `.agent
 
 ## Ticket flow
 
-- The spec is issue #1. Its original tickets are sub-issues #2–#9 with native blocking links; they are complete and serve as precedent.
-- The bomb-techniques slice is spec #11 with tickets #12–#15. New work starts as a ticket under the newest open spec; leave #1 open.
-- A ticket is ready when every issue in its `blockedBy.nodes` is closed.
+- The umbrella spec is issue #1. Its original tickets are sub-issues #2–#9 with native blocking links; they are complete and serve as precedent.
+- The bomb-techniques slice #11–#15 is closed. The current slice is spec #17, **Run records and the Daily Run**, with tickets #18–#21.
+- A ticket is ready when every issue in its `blockedBy.nodes` is closed. Work only the frontier.
 - `to-tickets` publishes vertical slices; `implement-spec` runs the frontier, merges to an integration branch, and closes tickets.
 - Each ticket is implemented test-first and verified against its acceptance criteria before it is closed.
 - A fresh worktree has no `node_modules`; run `npm ci` there before `npm run check`.
 - The `implement-spec` orchestrator keeps its turn open while an implementer runs. A subagent that outlives the turn leaves work unmerged; continue the thread and inspect its worktree before spawning anything new.
+- A slice ends with one integration PR to `main`. After it merges, close the slice spec with a verification comment and remove its worktrees; leave #1 open.
 
 ## Skills
 

@@ -17,11 +17,16 @@ import {
   type UpgradeId,
 } from '../game';
 import { type ArenaRenderer, createArenaRenderer } from '../render/renderer';
+import { dailyDateFromKey, dailyDateKey, dailySeed } from './daily';
 import { computeCanvasFit } from './fit';
 import { createInput } from './input';
 import { planFixedSteps } from './loop';
 import {
+  isNewBest,
+  isNewDailyBest,
   loadProfile,
+  type RunRecord,
+  type RunRecordInput,
   recordRun,
   type Settings,
   type StorageLike,
@@ -36,7 +41,8 @@ type ScreenState =
   | 'intermission'
   | 'gameover'
   | 'howto'
-  | 'settings';
+  | 'settings'
+  | 'records';
 
 const TITLE_SEED = 7;
 const STAGE_INTRO_TICKS = 90;
@@ -44,6 +50,18 @@ const STAGE_INTRO_TICKS = 90;
 export interface GameApp {
   start(): void;
 }
+
+interface RunRecordOutcome {
+  readonly newBest: boolean;
+  readonly newDailyBest: boolean;
+}
+
+/** The mode and captured date/seed for the current Run. */
+type RunSession =
+  | { readonly mode: 'endless' }
+  | { readonly mode: 'daily'; readonly dailyDate: string; readonly dailySeed: number };
+
+const NO_RUN_OUTCOME: RunRecordOutcome = { newBest: false, newDailyBest: false };
 
 /**
  * Browser shell: screen state, DOM HUD and menus, keyboard wiring, and the
@@ -75,16 +93,24 @@ export function createGameApp(doc: Document): GameApp {
   const intermissionSummary = requireElement<HTMLElement>(doc, '#intermission-summary');
   const upgradeCards = requireElement<HTMLElement>(doc, '#upgrade-cards');
   const stageIntro = requireElement<HTMLElement>(doc, '#stage-intro');
+  const stageIntroMode = requireElement<HTMLElement>(doc, '#stage-intro-mode');
   const stageIntroStage = requireElement<HTMLElement>(doc, '#stage-intro-stage');
   const stageIntroRivals = requireElement<HTMLElement>(doc, '#stage-intro-rivals');
   const gameoverScreen = requireElement<HTMLElement>(doc, '#gameover-screen');
+  const gameoverMode = requireElement<HTMLElement>(doc, '#gameover-mode');
   const gameoverScore = requireElement<HTMLElement>(doc, '#gameover-score');
   const gameoverStage = requireElement<HTMLElement>(doc, '#gameover-stage');
   const gameoverBricks = requireElement<HTMLElement>(doc, '#gameover-bricks');
   const gameoverRivals = requireElement<HTMLElement>(doc, '#gameover-rivals');
   const gameoverPickups = requireElement<HTMLElement>(doc, '#gameover-pickups');
   const gameoverTime = requireElement<HTMLElement>(doc, '#gameover-time');
+  const gameoverDaily = requireElement<HTMLElement>(doc, '#gameover-daily');
+  const gameoverDailyDate = requireElement<HTMLElement>(doc, '#gameover-daily-date');
+  const gameoverDailyBest = requireElement<HTMLElement>(doc, '#gameover-daily-best');
+  const gameoverNewDailyBest = requireElement<HTMLElement>(doc, '#gameover-new-daily-best');
   const titleBest = requireElement<HTMLElement>(doc, '#title-best');
+  const titleDailyBest = requireElement<HTMLElement>(doc, '#title-daily-best');
+  const titleLastRun = requireElement<HTMLElement>(doc, '#title-last-run');
   const howToScreen = requireElement<HTMLElement>(doc, '#howto-screen');
   const howToButton = requireElement<HTMLButtonElement>(doc, '#how-to-button');
   const howToBackButton = requireElement<HTMLButtonElement>(doc, '#howto-back-button');
@@ -97,8 +123,24 @@ export function createGameApp(doc: Document): GameApp {
   const settingShake = requireElement<HTMLInputElement>(doc, '#setting-shake');
   const settingReducedMotion = requireElement<HTMLInputElement>(doc, '#setting-reduced-motion');
   const settingHighContrast = requireElement<HTMLInputElement>(doc, '#setting-high-contrast');
+  const recordsScreen = requireElement<HTMLElement>(doc, '#records-screen');
+  const recordsButton = requireElement<HTMLButtonElement>(doc, '#records-button');
+  const gameoverRecordsButton = requireElement<HTMLButtonElement>(doc, '#gameover-records-button');
+  const recordsBackButton = requireElement<HTMLButtonElement>(doc, '#records-back-button');
+  const recordsBestScore = requireElement<HTMLElement>(doc, '#records-best-score');
+  const recordsBestStage = requireElement<HTMLElement>(doc, '#records-best-stage');
+  const recordsDailyLabel = requireElement<HTMLElement>(doc, '#records-daily-label');
+  const recordsDailyBest = requireElement<HTMLElement>(doc, '#records-daily-best');
+  const recordsScroll = requireElement<HTMLElement>(doc, '#records-scroll');
+  // The scroll region is a deliberate tab stop so keyboard users can scroll a
+  // long Run History without pointing at it. Biome's static HTML rule rejects a
+  // literal tabindex on a non-interactive element, so set it here instead.
+  recordsScroll.tabIndex = 0;
+  const recordsList = requireElement<HTMLOListElement>(doc, '#records-list');
+  const recordsEmpty = requireElement<HTMLElement>(doc, '#records-empty');
   const gameoverNewBest = requireElement<HTMLElement>(doc, '#gameover-newbest');
   const playButton = requireElement<HTMLButtonElement>(doc, '#play-button');
+  const dailyRunButton = requireElement<HTMLButtonElement>(doc, '#daily-run-button');
   const resumeButton = requireElement<HTMLButtonElement>(doc, '#resume-button');
   const quitButton = requireElement<HTMLButtonElement>(doc, '#quit-button');
   const retryButton = requireElement<HTMLButtonElement>(doc, '#retry-button');
@@ -111,19 +153,23 @@ export function createGameApp(doc: Document): GameApp {
   let profile = loadProfile(storage);
   let screen: ScreenState = 'title';
   let run: Run = createRun(TITLE_SEED);
+  let runSession: RunSession = { mode: 'endless' };
+  let titleDateKey = dailyDateKey(new Date());
   let titleStage: StageState = createStage({ seed: TITLE_SEED, rivalCount: 0 }).getState();
   let accumulator = 0;
   let lastFrameTime = 0;
   let running = false;
   let introTicks = 0;
+  let titleCheckTicks = 0;
   let runRecorded = false;
   let settingsReturn: 'title' | 'paused' = 'title';
+  let recordsReturn: 'title' | 'gameover' = 'title';
   let quitArmed = false;
   let quitTimer: number | null = null;
 
   applySettings();
   syncSettingsInputs();
-  renderTitleBest();
+  renderTitleProfile();
 
   const input = createInput(win, {
     onPauseToggle: () => {
@@ -135,11 +181,16 @@ export function createGameApp(doc: Document): GameApp {
         closeSettings();
       } else if (screen === 'howto') {
         closeHowTo();
+      } else if (screen === 'records') {
+        closeRecords();
       }
     },
   });
 
   function displayStage(): StageState {
+    if (screen === 'records') {
+      return recordsReturn === 'title' ? titleStage : run.getState().stageState;
+    }
     return screen === 'title' || screen === 'howto' || screen === 'settings'
       ? titleStage
       : run.getState().stageState;
@@ -160,10 +211,26 @@ export function createGameApp(doc: Document): GameApp {
     settingHighContrast.checked = profile.settings.highContrast;
   }
 
-  function renderTitleBest(): void {
+  function renderTitleProfile(): void {
     setText(
       titleBest,
       `BEST ${String(profile.highScore).padStart(6, '0')} · STAGE ${profile.bestStage}`,
+    );
+    const today = dailyDateKey(new Date());
+    titleDateKey = today;
+    const daily = profile.dailyBest;
+    setText(
+      titleDailyBest,
+      daily !== null && daily.date === today
+        ? `DAILY ${today} · BEST ${String(daily.score).padStart(6, '0')}`
+        : `DAILY ${today} · NO RUN YET`,
+    );
+    const last = profile.history[0];
+    setText(
+      titleLastRun,
+      last === undefined
+        ? 'LAST RUN — none yet'
+        : `LAST RUN ${String(last.score).padStart(6, '0')} · STAGE ${last.stage}`,
     );
   }
 
@@ -173,16 +240,31 @@ export function createGameApp(doc: Document): GameApp {
     applySettings();
   }
 
-  function recordFinishedRun(state: RunState): boolean {
+  function recordFinishedRun(state: RunState): RunRecordOutcome {
     if (runRecorded) {
-      return false;
+      return NO_RUN_OUTCOME;
     }
     runRecorded = true;
-    const previousBest = profile.highScore;
-    profile = recordRun(profile, { score: state.score, stage: state.stage });
+    const dailyDate = runSession.mode === 'daily' ? runSession.dailyDate : null;
+    const newBest = isNewBest(profile, state.score);
+    const newDailyBest = isNewDailyBest(profile, dailyDate, state.score);
+    const base = {
+      score: state.score,
+      stage: state.stage,
+      bricksDestroyed: state.stats.bricksDestroyed,
+      rivalsDefeated: state.stats.rivalsDefeated,
+      powerUpsCollected: state.stats.powerUpsCollected,
+      elapsedTicks: state.stats.elapsedTicks,
+      techniques: ownedTechniqueIds(state.techniques),
+    };
+    const input: RunRecordInput =
+      dailyDate === null
+        ? { ...base, mode: 'endless', dailyDate: null }
+        : { ...base, mode: 'daily', dailyDate };
+    profile = recordRun(profile, input, new Date());
     saveProfile(storage, profile);
-    renderTitleBest();
-    return state.score > previousBest;
+    renderTitleProfile();
+    return { newBest, newDailyBest };
   }
 
   function openHowTo(): void {
@@ -237,6 +319,122 @@ export function createGameApp(doc: Document): GameApp {
     }
   }
 
+  function openRecords(returnTo: 'title' | 'gameover'): void {
+    if (screen !== returnTo) {
+      return;
+    }
+    recordsReturn = returnTo;
+    screen = 'records';
+    if (returnTo === 'title') {
+      titleScreen.hidden = true;
+    } else {
+      gameoverScreen.hidden = true;
+    }
+    input.setGameplayEnabled(false);
+    renderRecords();
+    recordsScreen.hidden = false;
+    recordsScroll.scrollTop = 0;
+    recordsBackButton.focus({ preventScroll: true });
+  }
+
+  function closeRecords(): void {
+    if (screen !== 'records') {
+      return;
+    }
+    recordsScreen.hidden = true;
+    if (recordsReturn === 'title') {
+      screen = 'title';
+      titleScreen.hidden = false;
+      recordsButton.focus();
+    } else {
+      screen = 'gameover';
+      gameoverScreen.hidden = false;
+      gameoverRecordsButton.focus();
+    }
+  }
+
+  function renderRecords(): void {
+    setText(recordsBestScore, String(profile.highScore).padStart(6, '0'));
+    setText(recordsBestStage, String(profile.bestStage));
+
+    const today = dailyDateKey(new Date());
+    const daily = profile.dailyBest;
+    if (daily !== null && daily.date === today) {
+      setText(recordsDailyLabel, `Daily best · ${daily.date}`);
+      setText(recordsDailyBest, String(daily.score).padStart(6, '0'));
+    } else {
+      setText(recordsDailyLabel, 'Daily best · today');
+      setText(recordsDailyBest, '—');
+    }
+
+    const rows = profile.history.map(buildRecordRow);
+    recordsList.replaceChildren(...rows);
+    recordsList.hidden = rows.length === 0;
+    recordsEmpty.hidden = rows.length > 0;
+  }
+
+  function buildRecordRow(record: RunRecord): HTMLElement {
+    const row = doc.createElement('li');
+    row.className = 'record-row';
+    row.dataset['mode'] = record.mode;
+
+    const head = doc.createElement('div');
+    head.className = 'record-head';
+
+    const badge = doc.createElement('span');
+    badge.className = 'record-badge';
+    badge.textContent = record.mode === 'daily' ? 'Daily' : 'Endless';
+
+    const date = doc.createElement('span');
+    date.className = 'record-date';
+    date.textContent = record.dailyDate ?? dailyDateKey(new Date(record.finishedAt));
+
+    const score = doc.createElement('span');
+    score.className = 'record-score';
+    score.textContent = String(record.score).padStart(6, '0');
+
+    head.append(badge, date, score);
+
+    const stage = doc.createElement('p');
+    stage.className = 'record-stage';
+    stage.textContent = `Stage ${record.stage}`;
+
+    const stats = doc.createElement('dl');
+    stats.className = 'record-stats';
+    const entries: ReadonlyArray<readonly [string, string]> = [
+      ['Bricks', String(record.bricksDestroyed)],
+      ['Rivals', String(record.rivalsDefeated)],
+      ['Pickups', String(record.powerUpsCollected)],
+      ['Time', formatTime(record.elapsedTicks)],
+    ];
+    for (const [label, value] of entries) {
+      const stat = doc.createElement('div');
+      const term = doc.createElement('dt');
+      term.textContent = label;
+      const detail = doc.createElement('dd');
+      detail.textContent = value;
+      stat.append(term, detail);
+      stats.append(stat);
+    }
+
+    row.append(head, stage, stats);
+
+    if (record.techniques.length > 0) {
+      const chips = doc.createElement('ul');
+      chips.className = 'record-techniques';
+      for (const id of record.techniques) {
+        const chip = doc.createElement('li');
+        chip.className = 'record-chip';
+        chip.dataset['technique'] = id;
+        chip.textContent = TECHNIQUE_DEFINITIONS[id].chip;
+        chips.append(chip);
+      }
+      row.append(chips);
+    }
+
+    return row;
+  }
+
   function updateHud(): void {
     const state = run.getState();
     const stage = state.stageState;
@@ -285,19 +483,41 @@ export function createGameApp(doc: Document): GameApp {
   }
 
   function startRun(): void {
-    beginRun(createRun(Date.now() >>> 0));
+    const seed = Date.now() >>> 0;
+    beginRun(createRun(seed), { mode: 'endless' });
   }
 
-  function beginRun(nextRun: Run): void {
+  function startDailyRun(): void {
+    const now = new Date();
+    const dailyDate = dailyDateKey(now);
+    const seed = dailySeed(now);
+    beginRun(createRun(seed), { mode: 'daily', dailyDate, dailySeed: seed });
+  }
+
+  function retryRun(): void {
+    if (runSession.mode === 'daily') {
+      // Retry reuses the captured key and seed, so crossing midnight cannot
+      // swap the challenge while the player is still on the game-over screen.
+      beginRun(createRun(runSession.dailySeed), runSession);
+      return;
+    }
+    startRun();
+  }
+
+  function beginRun(nextRun: Run, session: RunSession): void {
     run = nextRun;
+    runSession = session;
     titleStage = createStage({ seed: TITLE_SEED, rivalCount: 0 }).getState();
     runRecorded = false;
     gameoverNewBest.hidden = true;
+    gameoverNewDailyBest.hidden = true;
+    gameoverDaily.hidden = true;
     screen = 'playing';
     titleScreen.hidden = true;
     pauseScreen.hidden = true;
     howToScreen.hidden = true;
     settingsScreen.hidden = true;
+    recordsScreen.hidden = true;
     intermissionScreen.hidden = true;
     gameoverScreen.hidden = true;
     hud.hidden = false;
@@ -312,6 +532,13 @@ export function createGameApp(doc: Document): GameApp {
   function beginStageIntro(): void {
     const state = run.getState();
     const rivals = state.stageState.rivals.length;
+    if (runSession.mode === 'daily') {
+      setText(stageIntroMode, `Daily Run · ${runSession.dailyDate}`);
+      stageIntroMode.hidden = false;
+    } else {
+      setText(stageIntroMode, '');
+      stageIntroMode.hidden = true;
+    }
     setText(stageIntroStage, String(state.stage));
     setText(
       stageIntroRivals,
@@ -460,7 +687,7 @@ export function createGameApp(doc: Document): GameApp {
     canvas.focus({ preventScroll: true });
   }
 
-  function showGameOver(state: RunState): void {
+  function showGameOver(state: RunState, recorded?: RunRecordOutcome): void {
     screen = 'gameover';
     gameoverScreen.hidden = false;
     intermissionScreen.hidden = true;
@@ -474,8 +701,25 @@ export function createGameApp(doc: Document): GameApp {
     setText(gameoverPickups, String(state.stats.powerUpsCollected));
     setText(gameoverTime, formatTime(state.stats.elapsedTicks));
     const isRealGameOver = state.stageState.status === 'gameover';
-    const newBest = isRealGameOver ? recordFinishedRun(state) : false;
-    gameoverNewBest.hidden = !newBest;
+    const outcome: RunRecordOutcome =
+      recorded ?? (isRealGameOver ? recordFinishedRun(state) : NO_RUN_OUTCOME);
+    const dailyKey = runSession.mode === 'daily' ? runSession.dailyDate : null;
+    setText(gameoverMode, dailyKey === null ? 'Endless Run' : `Daily Run · ${dailyKey}`);
+    if (dailyKey !== null) {
+      const daily = profile.dailyBest;
+      setText(gameoverDailyDate, dailyKey);
+      setText(
+        gameoverDailyBest,
+        daily !== null && daily.date === dailyKey ? String(daily.score).padStart(6, '0') : '—',
+      );
+      gameoverDaily.hidden = false;
+    } else {
+      setText(gameoverDailyDate, '');
+      setText(gameoverDailyBest, '—');
+      gameoverDaily.hidden = true;
+    }
+    gameoverNewBest.hidden = !outcome.newBest;
+    gameoverNewDailyBest.hidden = !outcome.newDailyBest;
     input.setGameplayEnabled(false);
     accumulator = 0;
     retryButton.focus();
@@ -493,6 +737,7 @@ export function createGameApp(doc: Document): GameApp {
     pauseScreen.hidden = true;
     howToScreen.hidden = true;
     settingsScreen.hidden = true;
+    recordsScreen.hidden = true;
     intermissionScreen.hidden = true;
     gameoverScreen.hidden = true;
     stageIntro.hidden = true;
@@ -500,7 +745,7 @@ export function createGameApp(doc: Document): GameApp {
     titleScreen.hidden = false;
     input.setGameplayEnabled(false);
     accumulator = 0;
-    renderTitleBest();
+    renderTitleProfile();
     playButton.focus();
   }
 
@@ -552,6 +797,15 @@ export function createGameApp(doc: Document): GameApp {
       }
     } else {
       accumulator = 0;
+      if (screen === 'title') {
+        titleCheckTicks += 1;
+        if (titleCheckTicks >= 60) {
+          titleCheckTicks = 0;
+          if (dailyDateKey(new Date()) !== titleDateKey) {
+            renderTitleProfile();
+          }
+        }
+      }
     }
 
     if (frameEvents.length > 0) {
@@ -684,19 +938,28 @@ export function createGameApp(doc: Document): GameApp {
       closeSettings();
       return;
     }
+    if (event.key === 'Escape' && screen === 'records') {
+      event.preventDefault();
+      closeRecords();
+      return;
+    }
     onIntermissionKeyDown(event);
   }
 
   playButton.addEventListener('click', startRun);
+  dailyRunButton.addEventListener('click', startDailyRun);
   resumeButton.addEventListener('click', resumeGame);
   quitButton.addEventListener('click', onQuitClick);
-  retryButton.addEventListener('click', startRun);
+  retryButton.addEventListener('click', retryRun);
   titleButton.addEventListener('click', quitToTitle);
   howToButton.addEventListener('click', openHowTo);
   howToBackButton.addEventListener('click', closeHowTo);
   settingsButton.addEventListener('click', () => openSettings('title'));
   pauseSettingsButton.addEventListener('click', () => openSettings('paused'));
   settingsBackButton.addEventListener('click', closeSettings);
+  recordsButton.addEventListener('click', () => openRecords('title'));
+  gameoverRecordsButton.addEventListener('click', () => openRecords('gameover'));
+  recordsBackButton.addEventListener('click', closeRecords);
   settingSound.addEventListener('change', onSettingChange);
   settingMusic.addEventListener('change', onSettingChange);
   settingShake.addEventListener('change', onSettingChange);
@@ -709,6 +972,7 @@ export function createGameApp(doc: Document): GameApp {
   );
   howToScreen.addEventListener('keydown', (event) => trapDialogFocus(event, howToScreen));
   settingsScreen.addEventListener('keydown', (event) => trapDialogFocus(event, settingsScreen));
+  recordsScreen.addEventListener('keydown', (event) => trapDialogFocus(event, recordsScreen));
   doc.addEventListener('keydown', onGlobalKeyDown);
   doc.addEventListener('click', (event) => {
     const target = event.target;
@@ -734,6 +998,7 @@ export function createGameApp(doc: Document): GameApp {
         startKickRun(): void;
         startPierceRun(): void;
         startDraftRun(): void;
+        startDailyRunOn(dateKey?: string): void;
         state(): unknown;
       };
     };
@@ -756,17 +1021,19 @@ export function createGameApp(doc: Document): GameApp {
         });
       },
       forceRunOver(): void {
+        let recorded: RunRecordOutcome | undefined;
         if (run.getState().status !== 'gameover') {
           run.quit();
-          recordFinishedRun(run.getState());
+          recorded = recordFinishedRun(run.getState());
         }
-        showGameOver(run.getState());
+        showGameOver(run.getState(), recorded);
       },
       startTechniqueRun(technique: TechniqueId = 'remote'): void {
         beginRun(
           createRun(TITLE_SEED, {
             initialTechniques: { ...INITIAL_TECHNIQUES, [technique]: 1 },
           }),
+          { mode: 'endless' },
         );
       },
       startKickRun(): void {
@@ -780,6 +1047,7 @@ export function createGameApp(doc: Document): GameApp {
               fuseMs: 10000,
             },
           }),
+          { mode: 'endless' },
         );
       },
       startPierceRun(): void {
@@ -803,6 +1071,7 @@ export function createGameApp(doc: Document): GameApp {
               fuseMs: 2500,
             },
           }),
+          { mode: 'endless' },
         );
       },
       startDraftRun(): void {
@@ -827,12 +1096,25 @@ export function createGameApp(doc: Document): GameApp {
               fuseMs: 900,
             },
           }),
+          { mode: 'endless' },
         );
+      },
+      startDailyRunOn(dateKey?: string): void {
+        const key = dateKey ?? dailyDateKey(new Date());
+        const date = dailyDateFromKey(key);
+        if (date === null) {
+          return;
+        }
+        const seed = dailySeed(date);
+        beginRun(createRun(seed), { mode: 'daily', dailyDate: key, dailySeed: seed });
       },
       state(): unknown {
         const state = run.getState();
         return {
           status: state.status,
+          seed: state.seed,
+          mode: runSession.mode,
+          dailyDate: runSession.mode === 'daily' ? runSession.dailyDate : null,
           stage: state.stage,
           lives: state.lives,
           score: state.score,

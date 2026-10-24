@@ -5,14 +5,14 @@ Bomb Blitz is a browser Bomberman clone: a single-player, endless arena run of m
 ## Start here
 
 - **Live game**: https://gerrcass.github.io/bomberman-clone/
-- **Spec**: [issue #1](https://github.com/gerrcass/bomberman-clone/issues/1) is the source of truth for rules, balance, scope, and testing.
+- **Spec**: [issue #1](https://github.com/gerrcass/bomberman-clone/issues/1) is the source of truth for rules, balance, scope, and testing. The newest slice spec is #17, **Run records and the Daily Run**, with tickets #18–#21.
 - **Tickets**: `gh issue list --state open --json number,title,blockedBy` describes the task graph. Work only the frontier: a ticket whose blockers are all closed.
 - **Vocabulary**: `GLOSSARY.md`. Use its terms in code, tests, tickets, and comments.
 - **Decisions**: `docs/adr/`. Read the ADRs that touch the area before changing it; surface conflicts rather than silently overriding them.
 - **Tracker, domain, and triage rules**: `docs/agents/`.
 - **Browser checks**: `docs/agents/browser-verification.md` before reporting presentation work done.
 
-The original build (#2–#9) is complete and deployed. Treat those closed tickets and the ADRs as precedent for new work.
+The original build (#2–#9) and the bomb-techniques slice (#11–#15) are complete and deployed. Treat those closed tickets and the ADRs as precedent for new work. #17 is in progress; leave #1 open as the umbrella spec.
 
 ## Workflow
 
@@ -22,7 +22,7 @@ Use the installed `implement-spec` skill for multi-ticket work. For a single tic
 2. Build it test-first with the `tdd` skill.
 3. Keep the integration branch tip merged into your branch before reporting done.
 4. Verify every acceptance criterion, then close the ticket with a comment naming the verification.
-5. Leave the spec issue #1 open.
+5. Leave the umbrella spec #1 open; close a slice spec only after all its tickets and its PR are done.
 
 Do not start a ticket whose blockers are open. Do not modify or close #1.
 
@@ -55,9 +55,9 @@ npm run check      # lint + typecheck + test + build
 
 ## Conventions
 
-- Speak the glossary: **Bomber**, **Rival**, **Tile**, **Blast**, **Stage**, **Run**, **Intermission**, **Upgrade**.
+- Speak the glossary: **Bomber**, **Rival**, **Tile**, **Blast**, **Stage**, **Run**, **Endless Run**, **Daily Run**, **Run Record**, **Run History**, **Intermission**, **Upgrade**, **Technique**.
 - Every gameplay change needs a test at the simulation or run seam. Renderer tests are not a substitute.
-- Gameplay randomness comes from the seeded generator. `Math.random()` stays out of `src/game/`.
+- Gameplay randomness comes from the seeded generator. `Math.random()` stays out of `src/game/`. A Daily Run seed comes from the pure local-date helper, not from the wall clock inside the simulation.
 - Nothing is fetched at runtime. Art is generated from pixel matrices, audio is synthesized, and only a bundled display font is packaged.
 - Strict TypeScript. Avoid `any`; when a browser boundary truly needs it, keep the cast narrow and explain why.
 - No DOM or canvas work inside the simulation, and no per-tick allocation spikes.
@@ -74,6 +74,8 @@ npm run check      # lint + typecheck + test + build
 - Losing the last life ends the run even if the last rival dies in the same tick.
 - The game auto-pauses when the document becomes hidden and resumes paused.
 - Walls stop blast rays without producing a blast tile.
+- Profile v2 is authoritative once present. The v1 key is a read-only migration source; a malformed v2 falls back to defaults rather than resurrecting v1.
+- Run History is local, newest-first, and capped at 20. A finished run records once; a daily run also updates the current date's Daily Best.
 
 ## Quality bar
 
