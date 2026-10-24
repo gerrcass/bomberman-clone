@@ -1,11 +1,12 @@
 import { createRng, shuffle } from './rng';
+import { type StageThemeId, themeDefinition } from './themes';
 import type { ArenaState, TileCoord, TileKind } from './types';
 
 export const ARENA_WIDTH = 15;
 export const ARENA_HEIGHT = 13;
 
-/** Fraction of eligible interior tiles covered by bricks. */
-export const BRICK_DENSITY = 0.58;
+/** Fraction of eligible interior tiles covered by bricks in Pillar Hall. */
+export const BRICK_DENSITY = themeDefinition('pillar-hall').brickDensity;
 
 /** Bottom-left spawn corner used by the player. */
 export const PLAYER_SPAWN: TileCoord = { x: 1, y: 11 };
@@ -61,17 +62,18 @@ export function isPillar(x: number, y: number): boolean {
 }
 
 /**
- * Generates the classic Bomberman lattice: wall border, pillars on even/even
- * interior coordinates, and bricks over 58% of the remaining eligible tiles.
- * Spawn corners and their orthogonal neighbors stay clear.
+ * Generates a themed arena: wall border, the theme's layout walls, and bricks
+ * over the theme's density of the remaining eligible tiles. Spawn corners and
+ * their orthogonal interior neighbours stay clear. Pillar Hall, the default,
+ * preserves the classic even/even lattice and 58% density.
  */
-export function generateArena(seed: number): ArenaState {
+export function generateArena(seed: number, theme: StageThemeId = 'pillar-hall'): ArenaState {
+  const definition = themeDefinition(theme);
   const tiles: TileKind[] = new Array(ARENA_WIDTH * ARENA_HEIGHT).fill('floor');
 
   for (let y = 0; y < ARENA_HEIGHT; y += 1) {
     for (let x = 0; x < ARENA_WIDTH; x += 1) {
-      const border = x === 0 || y === 0 || x === ARENA_WIDTH - 1 || y === ARENA_HEIGHT - 1;
-      if (border || isPillar(x, y)) {
+      if (isBorder(x, y) || isLayoutWall(theme, x, y)) {
         tiles[y * ARENA_WIDTH + x] = 'wall';
       }
     }
@@ -99,7 +101,7 @@ export function generateArena(seed: number): ArenaState {
     }
   }
 
-  const brickCount = Math.round(eligible.length * BRICK_DENSITY);
+  const brickCount = Math.round(eligible.length * definition.brickDensity);
   const shuffled = shuffle(createRng(seed), eligible);
   for (let index = 0; index < brickCount; index += 1) {
     const tileIndex = shuffled[index];
@@ -109,6 +111,30 @@ export function generateArena(seed: number): ArenaState {
   }
 
   return { width: ARENA_WIDTH, height: ARENA_HEIGHT, tiles };
+}
+
+function isBorder(x: number, y: number): boolean {
+  return x === 0 || y === 0 || x === ARENA_WIDTH - 1 || y === ARENA_HEIGHT - 1;
+}
+
+/**
+ * Layout walls per theme. Every pattern is 180-degree rotationally symmetric
+ * and leaves the spawn corners and their inward neighbours untouched.
+ */
+function isLayoutWall(theme: StageThemeId, x: number, y: number): boolean {
+  switch (theme) {
+    case 'pillar-hall':
+      return isPillar(x, y);
+    case 'brickworks':
+      return x >= 6 && x <= 8 && y >= 5 && y <= 7;
+    case 'crossroads':
+      return (
+        (y === 6 && ((x >= 3 && x <= 5) || (x >= 9 && x <= 11))) ||
+        (x === 7 && ((y >= 2 && y <= 4) || (y >= 8 && y <= 10)))
+      );
+    case 'twin-courts':
+      return x === 7 && y >= 1 && y <= 11 && y !== 3 && y !== 6 && y !== 9;
+  }
 }
 
 function orthogonalNeighbors(tile: TileCoord): TileCoord[] {
