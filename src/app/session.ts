@@ -1,3 +1,4 @@
+import type { RunRecord } from './profile';
 import { formatSeed } from './seed';
 
 /** The mode and captured date/seed for the current Run. */
@@ -5,6 +6,13 @@ export type RunSession =
   | { readonly mode: 'endless' }
   | { readonly mode: 'daily'; readonly dailyDate: string; readonly dailySeed: number }
   | { readonly mode: 'seed'; readonly seed: number };
+
+/** The Seed Run a Run Record replays as, or null when the record has no Seed. */
+export function replaySessionFor(
+  record: Pick<RunRecord, 'seed'>,
+): Extract<RunSession, { readonly mode: 'seed' }> | null {
+  return record.seed === null ? null : { mode: 'seed', seed: record.seed };
+}
 
 /** The mode line for a Stage intro, or null when the existing intro is enough. */
 export function stageIntroModeLabel(session: RunSession): string | null {

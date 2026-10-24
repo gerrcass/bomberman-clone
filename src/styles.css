@@ -1433,6 +1433,14 @@ html[data-high-contrast="true"] .hud-technique-key {
   text-transform: uppercase;
 }
 
+.record-seed-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+
 .record-seed {
   margin: 0;
   color: var(--text);
@@ -1441,6 +1449,12 @@ html[data-high-contrast="true"] .hud-technique-key {
   letter-spacing: 0.14em;
   text-transform: uppercase;
   font-variant-numeric: tabular-nums;
+}
+
+.record-replay {
+  min-width: 0;
+  padding: 6px 10px;
+  font-size: 9px;
 }
 
 .record-stats {
