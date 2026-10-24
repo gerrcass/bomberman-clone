@@ -187,6 +187,7 @@ scripts/check-docs-assets.mjs README image reference guard
 tests/smoke/                Playwright production and dev-harness smoke tests
 playwright.config.ts        Preview and dev servers for the smoke suite
 .github/workflows/ci.yml    Push and pull-request checks
+.github/workflows/pr-body.yml PR body evidence gate
 .github/workflows/pages.yml GitHub Pages deployment
 ```
 
@@ -208,6 +209,7 @@ the daily date/seed.
 | `npm run lint` | Run Biome checks |
 | `npm run format` | Apply Biome formatting and safe fixes |
 | `npm run check:docs` | Verify README image references resolve |
+| `npm run check:pr-body` | Validate a PR body against the `pr` skill evidence gate |
 | `npm run check` | Check docs assets, lint, typecheck, test, and build |
 
 ## Testing
@@ -276,6 +278,6 @@ npx playwright install --with-deps chromium
 npm run test:smoke
 ```
 
-The `check` job covers docs assets, lint, typecheck, Vitest, and the production build. The `browser-smoke` job runs the Playwright suite against a production preview and the dev harness.
+The `check` job covers docs assets, lint, typecheck, Vitest, and the production build. The `browser-smoke` job runs the Playwright suite against a production preview and the dev harness. A separate `PR body` workflow runs the evidence gate against every pull request body.
 
 Created in [T3 Code](https://t3.codes).

@@ -156,4 +156,4 @@ Draft a technique in a real run, or render one through the dev harness:
 
 ## Evidence
 
-Capture screenshots only when a change affects the README or a ticket's acceptance criteria. Keep committed screenshots in `docs/screenshots/` and reference them with relative paths.
+Follow the evidence gate in `docs/agents/pr-evidence.md`. For a visual change, capture before and after from the production build at the same 1280×900 viewport and an isolated browser context. Commit them under `docs/screenshots/` as `<slug>-before.png` and `<slug>-after.png` and embed both in the PR body. README screenshots are current-state documentation, not the PR evidence pair.
