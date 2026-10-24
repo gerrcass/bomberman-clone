@@ -1,5 +1,8 @@
 /** Runtime-generated pixel-art sprites. No external image assets. */
 
+import type { StageThemeId } from '../game/themes';
+import { TERRAIN_PALETTES, type TerrainPalette } from './theme-palettes';
+
 const MATRIX_SIZE = 16;
 const SPRITE_SCALE = 3;
 
@@ -260,32 +263,14 @@ const POWERUP_SHIELD_PALETTE: Palette = {
   '3': '#7aa7ff',
 };
 
-const FLOOR_PALETTE: Palette = {
-  a: '#0e1520',
-  b: '#1a2231',
-  c: '#26334a',
-};
-
-const WALL_PALETTE: Palette = {
-  '0': '#0a1220',
-  '1': '#1c2c44',
-  '2': '#47658f',
-  '3': '#6b8cba',
-  b: '#314864',
-};
-
-const BRICK_PALETTE: Palette = {
-  '0': '#3b1c12',
-  '1': '#6b301d',
-  '2': '#a4502b',
-  '3': '#cf7147',
-  b: '#8b4324',
-};
-
-export interface SpriteSet {
+export interface TerrainSprites {
   readonly floor: HTMLCanvasElement;
   readonly wall: HTMLCanvasElement;
   readonly brick: HTMLCanvasElement;
+}
+
+export interface SpriteSet {
+  readonly terrain: Readonly<Record<StageThemeId, TerrainSprites>>;
   readonly bomb: HTMLCanvasElement;
   readonly blast: HTMLCanvasElement;
   readonly blastB: HTMLCanvasElement;
@@ -304,9 +289,7 @@ type TerrainKind = 'floor' | 'wall' | 'brick';
 
 export function createSprites(): SpriteSet {
   return {
-    floor: createPixelSprite(createTerrainMatrix('floor'), FLOOR_PALETTE, SPRITE_SCALE),
-    wall: createPixelSprite(createTerrainMatrix('wall'), WALL_PALETTE, SPRITE_SCALE),
-    brick: createPixelSprite(createTerrainMatrix('brick'), BRICK_PALETTE, SPRITE_SCALE),
+    terrain: createTerrainSprites(),
     bomb: createPixelSprite(BOMB, BOMB_PALETTE, SPRITE_SCALE),
     blast: createPixelSprite(BLAST, BLAST_PALETTE, SPRITE_SCALE),
     blastB: createPixelSprite(BLAST, BLAST_B_PALETTE, SPRITE_SCALE),
@@ -319,6 +302,23 @@ export function createSprites(): SpriteSet {
     playerWalkA: createPixelSprite(PLAYER_WALK_A, PLAYER_PALETTE, SPRITE_SCALE),
     playerWalkB: createPixelSprite(PLAYER_WALK_B, PLAYER_PALETTE, SPRITE_SCALE),
     rivals: createRivalSprites(),
+  };
+}
+
+function createTerrainSprites(): Readonly<Record<StageThemeId, TerrainSprites>> {
+  return {
+    'pillar-hall': createTerrainSpriteSet(TERRAIN_PALETTES['pillar-hall']),
+    brickworks: createTerrainSpriteSet(TERRAIN_PALETTES.brickworks),
+    crossroads: createTerrainSpriteSet(TERRAIN_PALETTES.crossroads),
+    'twin-courts': createTerrainSpriteSet(TERRAIN_PALETTES['twin-courts']),
+  };
+}
+
+function createTerrainSpriteSet(palette: TerrainPalette): TerrainSprites {
+  return {
+    floor: createPixelSprite(createTerrainMatrix('floor'), palette.floor, SPRITE_SCALE),
+    wall: createPixelSprite(createTerrainMatrix('wall'), palette.wall, SPRITE_SCALE),
+    brick: createPixelSprite(createTerrainMatrix('brick'), palette.brick, SPRITE_SCALE),
   };
 }
 

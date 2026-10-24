@@ -7,6 +7,7 @@ import {
   TILE_SIZE,
 } from '../game';
 import { createSprites, type SpriteSet } from './sprites';
+import { terrainPalette } from './theme-palettes';
 
 export interface RenderPreferences {
   readonly screenShake: boolean;
@@ -72,7 +73,7 @@ export function createArenaRenderer(canvas: HTMLCanvasElement): ArenaRenderer {
           shakeUntilTick = Math.max(shakeUntilTick, event.tick + 13);
         }
       }
-      spawnParticles(events, particles, preferences.reducedMotion);
+      spawnParticles(events, particles, preferences.reducedMotion, state.theme);
       particles = particles.filter((particle) => state.tick - particle.bornTick < PARTICLE_TICKS);
 
       context.imageSmoothingEnabled = false;
@@ -116,14 +117,17 @@ function spawnParticles(
   events: readonly StageEvent[],
   particles: BrickParticle[],
   reducedMotion: boolean,
+  theme: StageState['theme'],
 ): void {
   if (reducedMotion) {
     return;
   }
 
+  const debris = terrainPalette(theme).debris;
+
   for (const event of events) {
     if (event.type === 'brick-destroyed') {
-      spawnBurst(particles, event.tile, event.tick, BRICK_PARTICLES, '#cf7147', '#8b4324');
+      spawnBurst(particles, event.tile, event.tick, BRICK_PARTICLES, debris[0], debris[1]);
       continue;
     }
     if (event.type === 'player-hit') {
@@ -177,12 +181,13 @@ function drawTerrain(
   sprites: SpriteSet,
 ): void {
   const { arena } = state;
+  const terrain = sprites.terrain[state.theme];
 
   for (let y = 0; y < arena.height; y += 1) {
     for (let x = 0; x < arena.width; x += 1) {
       const kind = arena.tiles[y * arena.width + x] ?? 'wall';
       const sprite =
-        kind === 'wall' ? sprites.wall : kind === 'brick' ? sprites.brick : sprites.floor;
+        kind === 'wall' ? terrain.wall : kind === 'brick' ? terrain.brick : terrain.floor;
       context.drawImage(sprite, x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
     }
   }
