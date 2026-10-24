@@ -986,13 +986,13 @@ kbd {
 .help-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px 18px;
+  gap: 10px 16px;
   width: 100%;
   text-align: left;
 }
 
 .help-grid h3 {
-  margin: 0 0 4px;
+  margin: 0 0 3px;
   color: var(--cyan);
   font-size: 12px;
   letter-spacing: 0.12em;
@@ -1002,8 +1002,8 @@ kbd {
 .help-grid p {
   margin: 0;
   color: var(--muted);
-  font-size: 12px;
-  line-height: 1.6;
+  font-size: 11px;
+  line-height: 1.45;
 }
 
 .settings-panel {

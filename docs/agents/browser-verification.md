@@ -40,10 +40,13 @@ Verify the intermission draft has three distinct cards, keyboard selection works
 
 Use the dev harness for seeded states, and a real run for the end-to-end path:
 
+- **Title:** confirm the all-time best line, today's Daily Best with the date (or
+  an explicit empty state), and the last-run line (or `LAST RUN — none yet`).
 - **Empty history:** with no stored runs, the Records screen explains how to create the first record instead of showing a blank list.
 - **Populated history:** finish a run, then open Records. Mode, local date, score, stage, bricks, rivals, pickups, time, and Technique chips match the run. Finish 21 runs (or seed the profile) and confirm the list keeps the newest 20.
-- **Persistence:** reload after a run; the title's bests and last-run line, Records, and the Daily Best survive.
-- **Daily Run:** start from the title. Confirm the stage intro names `Daily Run` and the date, the seed repeats when you retry, and the game-over screen shows the Daily Best and `New daily best!` only when improved.
+- **Persistence:** reload after a run; the title's bests, today's Daily Best, last-run line, and Records all survive.
+- **Daily Run:** start from the title. Confirm the stage intro names `Daily Run` and the date, the seed repeats when you retry, and the game-over screen shows the Daily Best and `New daily best!` only when improved. Confirm the all-time `New best!` still appears for both modes.
+- **Retry:** Retry Run starts another run in the same mode; an Endless Run gets a fresh seed and a Daily Run reuses its captured date seed.
 - **New date:** seed or inject a different date in the dev harness and confirm the Daily Best starts empty while older daily records remain in history.
 - **Keyboard:** Tab to Records, press Enter, Tab/Shift+Tab inside the dialog, Escape to close, and confirm focus returns to the Records control.
 - **Small window:** resize narrow; the records list scrolls inside the panel and the canvas does not clip.
