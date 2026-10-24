@@ -7,6 +7,7 @@ import {
   type Profile,
   RUN_HISTORY_LIMIT,
   type RunRecord,
+  type RunRecordInput,
   recordRun,
   type StorageLike,
   saveProfile,
@@ -15,10 +16,10 @@ import {
 
 const NOW = new Date('2026-10-23T12:00:00.000Z');
 
-function result(overrides: Partial<Parameters<typeof recordRun>[1]> = {}) {
-  return {
-    mode: 'endless' as const,
-    dailyDate: null,
+type RecordOverrides = Partial<Omit<RunRecord, 'finishedAt'>>;
+
+function result(overrides: RecordOverrides = {}): RunRecordInput {
+  const base = {
     score: 1234,
     stage: 3,
     bricksDestroyed: 40,
@@ -26,8 +27,16 @@ function result(overrides: Partial<Parameters<typeof recordRun>[1]> = {}) {
     powerUpsCollected: 7,
     elapsedTicks: 5432,
     techniques: [],
-    ...overrides,
   };
+  if (overrides.mode === 'daily') {
+    return {
+      ...base,
+      ...overrides,
+      mode: 'daily',
+      dailyDate: overrides.dailyDate ?? '2026-10-23',
+    };
+  }
+  return { ...base, ...overrides, mode: 'endless', dailyDate: null };
 }
 
 function runRecord(score: number, overrides: Partial<RunRecord> = {}): RunRecord {

@@ -8,6 +8,26 @@ export function dailyDateKey(date: Date): string {
 
 const FNV_OFFSET_BASIS = 0x811c9dc5;
 const FNV_PRIME = 0x01000193;
+const DATE_KEY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/**
+ * Parses a local `YYYY-MM-DD` key into a Date. Returns null for a malformed
+ * key or an impossible calendar date such as `2026-02-31`.
+ */
+export function dailyDateFromKey(key: string): Date | null {
+  const match = DATE_KEY_PATTERN.exec(key);
+  if (match === null) {
+    return null;
+  }
+  const [, year = '', month = '', day = ''] = match;
+  const date = new Date(Number(year), Number(month) - 1, Number(day));
+  return dailyDateKey(date) === key ? date : null;
+}
+
+/** True when a value is a real local `YYYY-MM-DD` calendar date key. */
+export function isDailyKey(value: unknown): value is string {
+  return typeof value === 'string' && dailyDateFromKey(value) !== null;
+}
 
 /**
  * Stable unsigned 32-bit seed for a local date. The date key is hashed with

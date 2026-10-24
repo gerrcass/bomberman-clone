@@ -1,4 +1,5 @@
 import { TECHNIQUE_ORDER, type TechniqueId } from '../game';
+import { isDailyKey } from './daily';
 
 export interface Settings {
   readonly sound: boolean;
@@ -70,19 +71,14 @@ export interface StorageLike {
   setItem(key: string, value: string): void;
 }
 
-const DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+type RunRecordBase = Omit<RunRecord, 'finishedAt' | 'mode' | 'dailyDate'>;
 
-export interface RunResult {
-  readonly mode: RunMode;
-  readonly dailyDate: string | null;
-  readonly score: number;
-  readonly stage: number;
-  readonly bricksDestroyed: number;
-  readonly rivalsDefeated: number;
-  readonly powerUpsCollected: number;
-  readonly elapsedTicks: number;
-  readonly techniques: readonly TechniqueId[];
-}
+/** The summary a finished Run supplies to `recordRun`. */
+export type RunRecordInput = RunRecordBase &
+  (
+    | { readonly mode: 'endless'; readonly dailyDate: null }
+    | { readonly mode: 'daily'; readonly dailyDate: string }
+  );
 
 export function loadProfile(storage: StorageLike | null): Profile {
   if (storage === null) {
@@ -100,7 +96,7 @@ export function loadProfile(storage: StorageLike | null): Profile {
     }
 
     const record = parsed as Record<string, unknown>;
-    if (record['version'] !== undefined && record['version'] !== 2) {
+    if (record['version'] !== 2) {
       return DEFAULT_PROFILE;
     }
     return {
@@ -159,42 +155,49 @@ export function saveProfile(storage: StorageLike | null, profile: Profile): void
 }
 
 /** Records a finished Run and returns the updated profile. */
-export function recordRun(profile: Profile, result: RunResult, now: Date): Profile {
-  const score = nonNegativeInteger(result.score);
-  const stage = nonNegativeInteger(result.stage);
-  const dailyDate =
-    result.mode === 'daily' && result.dailyDate !== null && DATE_KEY_PATTERN.test(result.dailyDate)
-      ? result.dailyDate
-      : null;
+export function recordRun(profile: Profile, input: RunRecordInput, now: Date): Profile {
   const record: RunRecord = {
+    ...input,
     finishedAt: now.toISOString(),
-    mode: dailyDate === null ? 'endless' : 'daily',
-    dailyDate,
-    score,
-    stage,
-    bricksDestroyed: nonNegativeInteger(result.bricksDestroyed),
-    rivalsDefeated: nonNegativeInteger(result.rivalsDefeated),
-    powerUpsCollected: nonNegativeInteger(result.powerUpsCollected),
-    elapsedTicks: nonNegativeInteger(result.elapsedTicks),
-    techniques: normalizeTechniques(result.techniques),
+    score: nonNegativeInteger(input.score),
+    stage: nonNegativeInteger(input.stage),
+    bricksDestroyed: nonNegativeInteger(input.bricksDestroyed),
+    rivalsDefeated: nonNegativeInteger(input.rivalsDefeated),
+    powerUpsCollected: nonNegativeInteger(input.powerUpsCollected),
+    elapsedTicks: nonNegativeInteger(input.elapsedTicks),
+    techniques: normalizeTechniques(input.techniques),
   };
 
   let dailyBest = profile.dailyBest;
-  if (record.mode === 'daily' && dailyDate !== null) {
+  if (input.mode === 'daily') {
     dailyBest =
-      dailyBest !== null && dailyBest.date === dailyDate
-        ? { date: dailyDate, score: Math.max(dailyBest.score, score) }
-        : { date: dailyDate, score };
+      dailyBest !== null && dailyBest.date === input.dailyDate
+        ? { date: input.dailyDate, score: Math.max(dailyBest.score, record.score) }
+        : { date: input.dailyDate, score: record.score };
   }
 
   return {
     ...profile,
-    highScore: Math.max(profile.highScore, score),
-    bestStage: Math.max(profile.bestStage, stage),
+    highScore: Math.max(profile.highScore, record.score),
+    bestStage: Math.max(profile.bestStage, record.stage),
     runsPlayed: profile.runsPlayed + 1,
     history: [record, ...profile.history].slice(0, RUN_HISTORY_LIMIT),
     dailyBest,
   };
+}
+
+/** True when a finished score beats the profile's all-time high score. */
+export function isNewBest(profile: Profile, score: number): boolean {
+  return nonNegativeInteger(score) > profile.highScore;
+}
+
+/** True when a daily score beats the stored Daily Best for that date. */
+export function isNewDailyBest(profile: Profile, dailyDate: string | null, score: number): boolean {
+  if (dailyDate === null || !isDailyKey(dailyDate)) {
+    return false;
+  }
+  const previous = profile.dailyBest?.date === dailyDate ? profile.dailyBest.score : 0;
+  return nonNegativeInteger(score) > previous;
 }
 
 export function updateSettings(profile: Profile, patch: Partial<Settings>): Profile {
@@ -241,15 +244,19 @@ function parseRunRecord(value: unknown): RunRecord | null {
     return null;
   }
 
-  const dailyDate = record['dailyDate'];
-  if (mode === 'daily' && (typeof dailyDate !== 'string' || !DATE_KEY_PATTERN.test(dailyDate))) {
-    return null;
+  let dailyDate: string | null = null;
+  if (mode === 'daily') {
+    const value = record['dailyDate'];
+    if (!isDailyKey(value)) {
+      return null;
+    }
+    dailyDate = value;
   }
 
   return {
     finishedAt,
     mode,
-    dailyDate: mode === 'daily' ? (dailyDate as string) : null,
+    dailyDate,
     score: nonNegativeInteger(record['score']),
     stage: nonNegativeInteger(record['stage']),
     bricksDestroyed: nonNegativeInteger(record['bricksDestroyed']),
@@ -267,7 +274,7 @@ function parseDailyBest(value: unknown): DailyBest | null {
 
   const record = value as Record<string, unknown>;
   const date = record['date'];
-  if (typeof date !== 'string' || !DATE_KEY_PATTERN.test(date)) {
+  if (!isDailyKey(date)) {
     return null;
   }
 
